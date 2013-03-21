@@ -64,6 +64,11 @@ public class testreceive
 				byte[] packet_bytes = new byte [buffer.remaining()];
 				buffer.get (packet_bytes, 0, packet_bytes.length);
 				buffer.clear();
+/* Rx testing */
+if (Math.random() < 0.25) {
+	System.out.println ("Dropping packet.");
+	continue;
+}
 				skb = new SocketBuffer (packet_bytes, 0, packet_bytes.length);
 				packet = PgmPacket.decode (skb);
 				if (!packet.isValid())

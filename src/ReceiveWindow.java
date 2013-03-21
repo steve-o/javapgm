@@ -52,6 +52,12 @@ public class ReceiveWindow {
 			this.packet = packet;
 			this.state = state;
 		}
+
+		public RxPacket (PacketState state)
+		{
+			this.packet = null;
+			this.state = state;
+		}
 	}
 
 	protected Queue<RxPacket>		backoffQueue;
@@ -73,6 +79,9 @@ public class ReceiveWindow {
 	protected boolean			isFecAvailable = false;
 	protected long				transmissionGroupSize;
 	protected long				tgSqnShift;
+
+/* TODO: set from socket. */
+	protected int				nak_bo_ivl = 50 * 1000;
 
 	protected long				minFillTime;
 	protected long				maxFillTime;
@@ -316,8 +325,25 @@ System.out.println ("updating trail");
 		}
 	}
 
+/* add one placeholder to leading edge due to detected lost packet.
+ */
 	private void addPlaceholder()
 	{
+/* advance lead */
+		this.lead.increment();
+
+		RxPacket packet = new RxPacket (PacketState.PKT_BACK_OFF_STATE);
+		packet.nakRandomBackoffExpiry = this.calculateNakRandomBackoffInterval();
+
+		if (!this.isFirstOfTransmissionGroup (this.lead.longValue())) {
+			RxPacket first = this.peek (new SequenceNumber (this.transmissionGroupSequenceNumber (this.lead)));
+			if (null != first)
+				first.isContiguous = false;
+		}
+
+/* add skb to window */
+		final int index = (int)(this.lead.longValue() % this.maxLength());
+		this.pdata.add (index, packet);
 	}
 
 /* Returns:
@@ -326,10 +352,25 @@ System.out.println ("updating trail");
  */
 	private Returns addPlaceholderRange (SequenceNumber sequence)
 	{
+/* check bounds of commit window */
 		final long newCommitSequence = (long)((1 + sequence.longValue()) - this.trail.longValue());
-		if (!this.isEmpty() && (newCommitSequence >= this.maxLength())) {
+		if (!this.commitIsEmpty() && (newCommitSequence >= this.maxLength())) {
 			this.updateLead (sequence);
 			return Returns.RXW_BOUNDS;
+		}
+		if (this.isFull()) {
+			System.out.println ("Receive window full on placeholder sequence.");
+			this.removeTrail();
+		}
+/* if packet is non-contiguous to current leading edge add place holders
+ * TODO: can be rather inefficient on packet loss looping through dropped sequence numbers
+ */
+		while (this.nextLead() != sequence.longValue()) {
+			this.addPlaceholder();
+			if (this.isFull()) {
+				System.out.println ("Receive window full on placeholder sequence.");
+				this.removeTrail();
+			}
 		}
 		return Returns.RXW_APPENDED;
 	}
@@ -807,6 +848,22 @@ System.out.println ("read");
 	private int recoveryAppend()
 	{
 		return -1;
+	}
+
+/* The java Math library function Math.random() generates a double value in the
+ * range [0,1). Notice this range does not include the 1.
+ * Reference: http://stackoverflow.com/a/363732/175849
+ */
+	private int randomIntRange (int begin, int end)
+	{
+		return begin + (int)(Math.random() * ((end - begin) + 1));
+	}
+
+/* calculate NAK_RB_IVL as random time interval 1 - NAK_BO_IVL.
+ */
+	private int calculateNakRandomBackoffInterval()
+	{
+		return this.randomIntRange (1 /* us */, this.nak_bo_ivl);
 	}
 
 	public boolean hasEvent()
