@@ -1,4 +1,5 @@
-
+/* Checksum computation for PGM packets using one's complement arithmetic.
+ */
 public class PgmChecksum {
 
 	public static final long partial (byte[] buf, int offset, int length, long sum)
@@ -40,3 +41,4 @@ public class PgmChecksum {
 	}
 }
 
+/* eof */

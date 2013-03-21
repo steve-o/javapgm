@@ -1,3 +1,6 @@
+/* Original data or ODATA packet.  Used for wrapping first tranmission of data
+ * on the wire.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -100,17 +103,19 @@ public class OriginalDataPacket extends PgmPacket {
 	public String toString() {
 		GlobalSourceId gsi = this.getGlobalSourceId ();
 		return  "{ " +
-			 "\"sourcePort\": " + this.getSourcePort() + "" +
-		       ", \"destinationPort\": " + this.getDestinationPort() + "" +
+			 "\"sourcePort\": " + this.getSourcePort() +
+		       ", \"destinationPort\": " + this.getDestinationPort() +
 		       ", \"type\": \"" + this.getTypeName (this.getType()) + "\"" +
-		       ", \"options\": " + this.getOptions() + "" +
-		       ", \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) + "" +
+		       ", \"options\": " + this.getOptions() +
+		       ", \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) +
 		       ", \"gsi\": \"" + gsi + "\"" +
-		       ", \"tsduLength\": " + this.getTsduLength() + "" +
-		       ", \"odataSqn\": " + this.getSequenceNumber() + "" +
-		       ", \"odataTrail\": " + this.getTrail() + "" +
+		       ", \"tsduLength\": " + this.getTsduLength() +
+		       ", \"odataSqn\": " + this.getSequenceNumber() +
+		       ", \"odataTrail\": " + this.getTrail() +
 		       ", \"odataData\": \"" + this.getDataAsString() + "\"" +
 		        " }";
 	}
 
 }
+
+/* eof */

@@ -1,4 +1,6 @@
-
+/* Wrapper for Java primitives data type to handle window semantics of
+ * comparison and wrapping.
+ */
 public final class SequenceNumber extends Number implements Comparable<SequenceNumber> {
 
 	public static final long   MIN_VALUE = 0L;
@@ -18,23 +20,23 @@ public final class SequenceNumber extends Number implements Comparable<SequenceN
 		this.assign (sequence.longValue());
 	}
 
-	public int intValue () {	/* Number interface */
+	public int intValue() {	/* Number interface */
 		return -1;
 	}
 
-	public long longValue () {
+	public long longValue() {
 		return value;
 	}
 
-	public float floatValue () {	/* Number interface */
+	public float floatValue() {	/* Number interface */
 		return (float)-1.0;
 	}
 
-	public double doubleValue () {	/* Number interface */
+	public double doubleValue() {	/* Number interface */
 		return (double)-1.0;
 	}
 
-	public String toString () {
+	public String toString() {
 		return String.valueOf (value);
 	}
 
@@ -77,7 +79,7 @@ public final class SequenceNumber extends Number implements Comparable<SequenceN
 		return this.lt (anotherSqn) ? -1 : (this.equals (anotherSqn) ? 0 : 1);
 	}
 
-	public SequenceNumber increment () {
+	public SequenceNumber increment() {
 		if (this.MAX_VALUE == this.value) {
 			this.value = this.MIN_VALUE;
 		} else {
@@ -86,7 +88,7 @@ public final class SequenceNumber extends Number implements Comparable<SequenceN
 		return this;
 	}
 
-	public long nextValue () {
+	public long nextValue() {
 		if (this.MAX_VALUE == this.value) {
 			return this.MIN_VALUE;
 		} else {

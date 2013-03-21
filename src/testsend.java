@@ -1,4 +1,5 @@
-
+/* Transmit a manually constructed PGM data packet.
+ */
 import java.util.*;
 import java.net.*;
 
@@ -65,9 +66,10 @@ public class testsend
 		s.close();
 	}
 
-	public static void main(String args[])
+	public static void main (String args[])
 	{
-		new testsend(args);
+		new testsend (args);
 	}
 }
 
+/* eof */

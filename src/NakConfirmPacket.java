@@ -1,3 +1,6 @@
+/* NAK confirm packet or NCF is sent on immediate receipt of a NAK to suppress
+ * other peer subscribers from sending their own NAK.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -97,16 +100,16 @@ public class NakConfirmPacket extends PgmPacket {
 			switch (this.getGroupPathAddressFamilyIndicator()) {
 			case AFI_IP:
 				byte[] in_addr = new byte[ SIZEOF_INADDR ];
-				System.arraycopy(this._buf, ncf_grp_nla_offset,
-						 in_addr, 0,
-						 in_addr.length);
+				System.arraycopy (this._buf, ncf_grp_nla_offset,
+						  in_addr, 0,
+						  in_addr.length);
 				ncf_grp_nla = Inet4Address.getByAddress (in_addr);
 				break;
 			case AFI_IP6:
 				byte[] in6_addr = new byte[ SIZEOF_INADDR6 ];
-				System.arraycopy(this._buf, ncf_grp_nla_offset,
-						 in6_addr, 0,
-						 in6_addr.length);
+				System.arraycopy (this._buf, ncf_grp_nla_offset,
+						  in6_addr, 0,
+						  in6_addr.length);
 				ncf_grp_nla = Inet6Address.getByAddress (in6_addr);
 				break;
 			default:
@@ -120,21 +123,21 @@ public class NakConfirmPacket extends PgmPacket {
 	}
 
 	public String toString() {
-		GlobalSourceId gsi = this.getGlobalSourceId ();
+		GlobalSourceId gsi = this.getGlobalSourceId();
 		return  "{" +
-			"sourcePort:" + this.getSourcePort() +
-		       " destinationPort:" + this.getDestinationPort() +
-		       " type:" + this.getTypeName (this.getType()) +
-		       " options:" + this.getOptions() +
-		       " checksum:0x" + Integer.toHexString(this.getChecksum()) +
-		       " gsi:" + gsi +
-		       " tsduLength:" + this.getTsduLength() +
-		       " ncfSqn:" + this.getSequenceNumber() +
-		       " ncfSrcNlaAfi:" + this.getSourcePathAddressFamilyIndicator() +
-		       " ncfSrcNla:" + this.getSourcePath() +
-		       " ncfGrpNlaAfi:" + this.getGroupPathAddressFamilyIndicator() +
-		       " ncfGrpNla:" + this.getGroupPath() +
-		        "}\n";
+			 "\"sourcePort\": " + this.getSourcePort() +
+		       ", \"destinationPort\": " + this.getDestinationPort() +
+		       ", \"type\": \"" + this.getTypeName (this.getType()) + "\"" +
+		       ", \"options\": " + this.getOptions() +
+		       ", \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) +
+		       ", \"gsi\": \"" + gsi + "\"" +
+		       ", \"tsduLength\": " + this.getTsduLength() +
+		       ", \"ncfSqn\": " + this.getSequenceNumber() +
+		       ", \"ncfSrcNlaAfi\": " + this.getSourcePathAddressFamilyIndicator() +
+		       ", \"ncfSrcNla\": " + this.getSourcePath() +
+		       ", \"ncfGrpNlaAfi\": " + this.getGroupPathAddressFamilyIndicator() +
+		       ", \"ncfGrpNla\": " + this.getGroupPath() +
+		        "}";
 	}
 
 }

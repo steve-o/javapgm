@@ -1,3 +1,5 @@
+/* Unique global source identifier.
+ */
 import java.net.*;
 import java.security.*;
 import java.util.*;

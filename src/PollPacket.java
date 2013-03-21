@@ -1,3 +1,5 @@
+/* Poll packet for starting receiver poll rounds.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -113,22 +115,24 @@ public class PollPacket extends PgmPacket {
 	public String toString() {
 		GlobalSourceId gsi = this.getGlobalSourceId ();
 		return  "{" +
-			"sourcePort:" + this.getSourcePort() +
-		       " destinationPort:" + this.getDestinationPort() +
-		       " type:" + this.getTypeName (this.getType()) +
-		       " options:" + this.getOptions() +
-		       " checksum:0x" + Integer.toHexString(this.getChecksum()) +
-		       " gsi:" + gsi +
-		       " tsduLength:" + this.getTsduLength() +
-		       " pollSqn:" + this.getSequenceNumber() +
-		       " pollRound:" + this.getRound() +
-		       " pollSType:" + this.getSubtype() +
-		       " pollNlaAfi:" + this.getPathAddressFamilyIndicator() +
-		       " pollNla:" + this.getPath() +
-		       " pollBoIvl:" + this.getBackoffInterval() +
-		       " pollRand:0x" + Long.toHexString(this.getRand()) +
-		       " pollMask:0x" + Long.toHexString(this.getMask()) +
+			 "\"sourcePort\": " + this.getSourcePort() +
+		       ", \"destinationPort\": " + this.getDestinationPort() +
+		       ", \"type\": \"" + this.getTypeName (this.getType()) + "\"" +
+		       ", \"options\": " + this.getOptions() +
+		       ", \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) +
+		       ", \"gsi\": \"" + gsi + "\"" +
+		       ", \"tsduLength\": " + this.getTsduLength() +
+		       ", \"pollSqn\": " + this.getSequenceNumber() +
+		       ", \"pollRound\": " + this.getRound() +
+		       ", \"pollSType\": " + this.getSubtype() +
+		       ", \"pollNlaAfi\": " + this.getPathAddressFamilyIndicator() +
+		       ", \"pollNla\": \"" + this.getPath() + "\"" +
+		       ", \"pollBoIvl\": " + this.getBackoffInterval() +
+		       ", \"pollRand\": 0x" + Long.toHexString (this.getRand()) +
+		       ", \"pollMask\": 0x" + Long.toHexString (this.getMask()) +
 		        "}\n";
 	}
 
 }
+
+/* eof */

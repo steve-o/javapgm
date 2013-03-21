@@ -1,3 +1,5 @@
+/* Primitive data buffer for PGM packets.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -10,19 +12,19 @@ public class SocketBuffer {
 	private long		timestamp = 0;
 
 	public SocketBuffer() {
-		this(1500);
+		this (1500);
 	}
 
-	public SocketBuffer(int length) {
+	public SocketBuffer (int length) {
 		this._length = length;
 		this._buf = new byte[length];
 	}
 
-	public SocketBuffer(byte[] buf) {
-		this(buf, 0, buf.length);
+	public SocketBuffer (byte[] buf) {
+		this (buf, 0, buf.length);
 	}
 
-	public SocketBuffer(byte[] buf, int offset, int length) {
+	public SocketBuffer (byte[] buf, int offset, int length) {
 		this._buf = buf;
 		this._offset = offset;
 		this._length = offset + length;
@@ -45,3 +47,5 @@ public class SocketBuffer {
 		return this.timestamp;
 	}
 }
+
+/* eof */

@@ -1,3 +1,5 @@
+/* Receive window as a ring buffer.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -314,7 +316,7 @@ System.out.println ("updating trail");
 		}
 	}
 
-	private void addPlaceholder ()
+	private void addPlaceholder()
 	{
 	}
 
@@ -344,7 +346,7 @@ System.out.println ("updating trail");
 		return true;
 	}
 
-	private void findMissing ()
+	private void findMissing()
 	{
 	}
 
@@ -354,7 +356,7 @@ System.out.println ("updating trail");
 		return false;
 	}
 
-	private boolean hasPayloadOp ()
+	private boolean hasPayloadOp()
 	{
 /* ignore fragments */
 		return false;
@@ -420,7 +422,7 @@ System.out.println ("updating trail");
 		return Returns.RXW_INSERTED;
 	}
 
-	private void shuffleParity ()
+	private void shuffleParity()
 	{
 	}
 
@@ -837,3 +839,5 @@ System.out.println ("read");
 	}
 
 }
+
+/* eof */

@@ -1,4 +1,4 @@
-/*
+/* Example subscription to a PGM stream.
  */ 
 
 import java.io.*;
@@ -9,6 +9,7 @@ import java.util.*;
 
 public class testreceive
 {
+/* Windows does not have convenient adapter names. */
 //	String interfaceName = "10.0.9.30";
 	String interfaceName = "eth0";
 	String networkGroup = "239.192.0.1";
@@ -353,8 +354,10 @@ System.out.println ("peer read=" + peer_bytes);
 		return bytes_read;
 	}
 
-	public static void main(String[] args) throws IOException
+	public static void main (String[] args) throws IOException
 	{
 		new testreceive (args);
 	}
 }
+
+/* eof */

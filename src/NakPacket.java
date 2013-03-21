@@ -1,3 +1,6 @@
+/* Negative acknowledgement or NAK packet.  Sent by receiver to source to re-
+ * request delivery of a lost or corrupt packet.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -112,21 +115,22 @@ public class NakPacket extends PgmPacket {
 	}
 
 	public String toString() {
-		GlobalSourceId gsi = this.getGlobalSourceId ();
+		GlobalSourceId gsi = this.getGlobalSourceId();
 		return  "{" +
-			"sourcePort:" + this.getSourcePort() +
-		       " destinationPort:" + this.getDestinationPort() +
-		       " type:" + this.getTypeName (this.getType()) +
-		       " options:" + this.getOptions() +
-		       " checksum:0x" + Integer.toHexString(this.getChecksum()) +
-		       " gsi:" + gsi +
-		       " tsduLength:" + this.getTsduLength() +
-		       " nakSqn:" + this.getSequenceNumber() +
-		       " nakSrcNlaAfi:" + this.getSourcePathAddressFamilyIndicator() +
-		       " nakSrcNla:" + this.getSourcePath() +
-		       " nakGrpNlaAfi:" + this.getGroupPathAddressFamilyIndicator() +
-		       " nakGrpNla:" + this.getGroupPath() +
-		        "}\n";
+			 "\"sourcePort\": " + this.getSourcePort() +
+		       ", \"destinationPort\": " + this.getDestinationPort() +
+		       ", \"type\": \"" + this.getTypeName (this.getType()) + "\"" +
+		       ", \"options\": " + this.getOptions() +
+		       ", \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) +
+		       ", \"gsi\": \"" + gsi + "\"" +
+		       ", \"tsduLength\": " + this.getTsduLength() +
+		       ", \"nakSqn\": " + this.getSequenceNumber() +
+		       ", \"nakSrcNlaAfi\": " + this.getSourcePathAddressFamilyIndicator() +
+		       ", \"nakSrcNla\": " + this.getSourcePath() +
+		       ", \"nakGrpNlaAfi\": " + this.getGroupPathAddressFamilyIndicator() +
+		       ", \"nakGrpNla\": " + this.getGroupPath() +
+		        "}";
 	}
-
 }
+
+/* eof */

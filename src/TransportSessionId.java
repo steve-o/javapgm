@@ -1,4 +1,5 @@
-
+/* Unique identifier for each PGM transport session.
+ */
 public class TransportSessionId
 {
 	private GlobalSourceId gsi = null;

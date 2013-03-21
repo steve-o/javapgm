@@ -7,7 +7,7 @@ Java implementation of the PGM protocol.
 Example usage
 =============
 
-Modify testreceive.java for the appropriate network configuration and build the
+Modify `testreceive.java` for the appropriate network configuration and build the
 class set.
 ```
   java testreceive

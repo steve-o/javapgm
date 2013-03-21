@@ -1,3 +1,6 @@
+/* Source path message or SPM packet.  Used for defining and keeping multicast
+ * circuit state.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -77,10 +80,10 @@ public class SourcePathMessagePacket extends PgmPacket {
 		return  "{" +
 			 "\"sourcePort\": " + this.getSourcePort() +
 		       ", \"destinationPort\": " + this.getDestinationPort() +
-		       ", \"type\": " + this.getTypeName (this.getType()) +
+		       ", \"type\": \"" + this.getTypeName (this.getType()) + "\"" +
 		       ", \"options\": " + this.getOptions() +
-		       ", \"checksum\": 0x" + Integer.toHexString(this.getChecksum()) +
-		       ", \"gsi\": " + gsi +
+		       ", \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) +
+		       ", \"gsi\": \"" + gsi + "\"" +
 		       ", \"tsduLength\": " + this.getTsduLength() +
 		       ", \"spmSqn\": " + this.getSequenceNumber() +
 		       ", \"spmTrail\": " + this.getTrail() +
@@ -89,5 +92,6 @@ public class SourcePathMessagePacket extends PgmPacket {
 		       ", \"spmNla\": " + this.getPath() +
 		        "}\n";
 	}
-
 }
+
+/* eof */

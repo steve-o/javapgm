@@ -1,6 +1,5 @@
-/*
+/* Example of basic UDP receiver not using a selector.
  */ 
-
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -27,8 +26,9 @@ public class udprecv
 						", \"length\": " + datagram.getLength() + "" +
 						" }");
 		}
+/* Sequence to cleanup opened socket: */
 //		socket.leaveGroup (address);
-//		socket.close ();
+//		socket.close();
 	}
 
 	public static void main (String[] args) throws IOException
@@ -36,3 +36,5 @@ public class udprecv
 		new udprecv (args);
 	}
 }
+
+/* eof */

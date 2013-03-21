@@ -1,4 +1,5 @@
-
+/* Example of a basic UDP receiver sans selector.
+ */
 import java.io.*;
 import java.util.*;
 import java.net.*;
@@ -25,3 +26,4 @@ public class udpsend
 	}
 }
 
+/* eof */

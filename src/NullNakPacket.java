@@ -1,3 +1,6 @@
+/* Null-NAK or NNAK packet.  Feedback by PGM infrastructure after
+ * suppressing local network NAKs for adaptive parameter calculation.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -112,21 +115,22 @@ public class NullNakPacket extends PgmPacket {
 	}
 
 	public String toString() {
-		GlobalSourceId gsi = this.getGlobalSourceId ();
+		GlobalSourceId gsi = this.getGlobalSourceId();
 		return  "{" +
-			"sourcePort:" + this.getSourcePort() +
-		       " destinationPort:" + this.getDestinationPort() +
-		       " type:" + this.getTypeName (this.getType()) +
-		       " options:" + this.getOptions() +
-		       " checksum:0x" + Integer.toHexString(this.getChecksum()) +
-		       " gsi:" + gsi +
-		       " tsduLength:" + this.getTsduLength() +
-		       " nnakSqn:" + this.getSequenceNumber() +
-		       " nnakSrcNlaAfi:" + this.getSourcePathAddressFamilyIndicator() +
-		       " nnakSrcNla:" + this.getSourcePath() +
-		       " nnakGrpNlaAfi:" + this.getGroupPathAddressFamilyIndicator() +
-		       " nnakGrpNla:" + this.getGroupPath() +
+			 "\"sourcePort\": " + this.getSourcePort() +
+		       ", \"destinationPort\": " + this.getDestinationPort() +
+		       ", \"type\": \"" + this.getTypeName (this.getType()) + "\"" +
+		       ", \"options\": " + this.getOptions() +
+		       ", \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) +
+		       ", \"gsi\": \"" + gsi + "\"" +
+		       ", \"tsduLength\": " + this.getTsduLength() +
+		       ", \"nnakSqn\": " + this.getSequenceNumber() +
+		       ", \"nnakSrcNlaAfi\": " + this.getSourcePathAddressFamilyIndicator() +
+		       ", \"nnakSrcNla\": " + this.getSourcePath() +
+		       ", \"nnakGrpNlaAfi\": " + this.getGroupPathAddressFamilyIndicator() +
+		       ", \"nnakGrpNla\": " + this.getGroupPath() +
 		        "}\n";
 	}
-
 }
+
+/* eof */

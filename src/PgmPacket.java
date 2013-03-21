@@ -1,3 +1,5 @@
+/* Abstract base class for PGM packet formats.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -177,12 +179,12 @@ public class PgmPacket {
 		this.setUnsignedShort (PGM_CHECKSUM_OFFSET, checksum);
 	}
 
-	public void updateChecksum () {
+	public void updateChecksum() {
 		this.setChecksum (0);
 		this.setChecksum (PgmChecksum.fold (PgmChecksum.partial (this._buf, this._offset, this._length, 0)));
 	}
 
-	public final GlobalSourceId getGlobalSourceId () {
+	public final GlobalSourceId getGlobalSourceId() {
 		byte[] buf = new byte[ GlobalSourceId.SIZE ];
 		System.arraycopy (this._buf, PGM_GSI_OFFSET, buf, 0, GlobalSourceId.SIZE);
 		return new GlobalSourceId (buf);
@@ -192,7 +194,7 @@ public class PgmPacket {
 		System.arraycopy (gsi.getAsBytes(), 0, this._buf, PGM_GSI_OFFSET, GlobalSourceId.SIZE);
 	}
 
-	public final TransportSessionId getTransportSessionId () {
+	public final TransportSessionId getTransportSessionId() {
 		return new TransportSessionId (this.getGlobalSourceId(), this.getSourcePort());
 	}
 
@@ -215,7 +217,7 @@ public class PgmPacket {
 		       " \"destinationPort\": " + this.getDestinationPort() + "" +
 		       " \"type\": \"" + this.getType() + "\"" +
 		       " \"options\": " + this.getOptions() + "" +
-		       " \"checksum\": 0x" + Integer.toHexString(this.getChecksum()) + "" +
+		       " \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) + "" +
 		       " \"gsi\": \"" + gsi + "\"" +
 		       " \"tsduLength\": " + this.getTsduLength() + "" +
 			" }";
@@ -307,3 +309,5 @@ public class PgmPacket {
 		this._buf[offset + 7] = (byte)((value >>  0) & 0xff);
 	}
 }
+
+/* eof */

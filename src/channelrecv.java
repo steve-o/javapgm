@@ -1,6 +1,6 @@
-/* Requires JDK 7.
+/* UDP receiver example using reactor pattern.
+ * Requires JDK 7 for selector API support for multicast sockets.
  */ 
-
 import java.io.*;
 import java.nio.*;
 import java.nio.channels.*;
@@ -9,6 +9,7 @@ import java.util.*;
 
 public class channelrecv
 {
+/* Selector API requires a network interface for subscribing to data. */
 	String adapter = "10.0.9.30";
 	String group = "239.192.0.1";
 	int port = 7500;
@@ -36,7 +37,7 @@ public class channelrecv
 				selector.selectedKeys().clear();
 				SocketAddress source = dc.receive (buffer);
 				buffer.flip();
-				byte[] bytes = new byte [buffer.remaining()];
+				byte[] bytes = new byte[buffer.remaining()];
 				buffer.get (bytes, 0, bytes.length);
 				buffer.clear();
 				System.out.println ("packet: { " +
@@ -52,3 +53,5 @@ public class channelrecv
 		new channelrecv (args);
 	}
 }
+
+/* eof */

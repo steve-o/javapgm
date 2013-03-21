@@ -1,3 +1,5 @@
+/* Repair-data or RDATA packet.  Used for re-transmits of payload data.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -32,16 +34,17 @@ public class RepairDataPacket extends PgmPacket {
 	public String toString() {
 		GlobalSourceId gsi = this.getGlobalSourceId ();
 		return  "{" +
-			"sourcePort:" + this.getSourcePort() +
-		       " destinationPort:" + this.getDestinationPort() +
-		       " type:" + this.getTypeName (this.getType()) +
-		       " options:" + this.getOptions() +
-		       " checksum:0x" + Integer.toHexString(this.getChecksum()) +
-		       " gsi:" + gsi +
-		       " tsduLength:" + this.getTsduLength() +
-		       " rdataSqn:" + this.getSequenceNumber() +
-		       " rdataTrail:" + this.getTrail() +
+			 "\"sourcePort\": " + this.getSourcePort() +
+		       ", \"destinationPort\": " + this.getDestinationPort() +
+		       ", \"type\": " + this.getTypeName (this.getType()) +
+		       ", \"options\": " + this.getOptions() +
+		       ", \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) +
+		       ", \"gsi\": \"" + gsi + "\"" +
+		       ", \"tsduLength\": " + this.getTsduLength() +
+		       ", \"rdataSqn\": " + this.getSequenceNumber() +
+		       ", \"rdataTrail\": " + this.getTrail() +
 		        "}\n";
 	}
-
 }
+
+/* eof */

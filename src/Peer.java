@@ -1,3 +1,6 @@
+/* A peer in the context of the sock is another party on the network sending PGM
+ * packets.
+ */
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -94,10 +97,12 @@ public class Peer {
 
 	public String toString() {
 		return	 "{ " +
-			 "\"tsi\": \"" + this.tsi + "\"" +
+			  "\"tsi\": \"" + this.tsi + "\"" +
 			", \"groupPath\": " + this.groupPath + "" +
 			", \"lastPacketTimestamp\": " + this.lastPacketTimestamp + "" +
 			", \"window\": " + this.window + "" +
 			 " }";
 	}
 }
+
+/* eof */
