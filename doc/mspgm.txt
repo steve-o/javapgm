@@ -1,0 +1,95 @@
+2.1.3 Use of PGM
+================
+
+The PGM specification [RFC3208] is ambiguous in a number of areas. SRMP uses PGM as specified in the following section. All sections of [RFC3208] except sections 7, 9.5, and 11–15 MUST be implemented (that is, no network element or designated local repairer functionality, nor appendices A–E).<3>
+
+Reference: http://msdn.microsoft.com/en-us/library/cc219050.aspx
+
+
+2.1.3.1 Clarifications for RFC 3208
+===================================
+
+The following values SHOULD<4> be used for the constants defined in [RFC3208].
+
++----------------------------+-----------------------------+
+| Constant                   | Value                       |
++----------------------------+-----------------------------+
+| TXW_MAX_RTE                | 70 kilobytes per second     |
++----------------------------+-----------------------------+
+| TXW_SECS                   | 300                         |
++----------------------------+-----------------------------+
+| TXW_ADV_SECS               | 15% of TXW_SECS             |
++----------------------------+-----------------------------+
+| TXW_ADV_IVL                | 15% of TXW_SECS             |
++----------------------------+-----------------------------+
+| IHB_MIN                    | 1 second                    |
++----------------------------+-----------------------------+
+| IHB_MAX                    | 15 seconds                  |
++----------------------------+-----------------------------+
+| NAK_RPT_IVL                | 0.75 seconds                |
++----------------------------+-----------------------------+
+| NAK_RDATA_IVL              | 2 seconds                   |
++----------------------------+-----------------------------+
+| NAK_NCF_RETRIES            | 10                          |
++----------------------------+-----------------------------+
+| NAK_DATA_RETRIES           | 10                          |
++----------------------------+-----------------------------+
+| Token bucket size          | 40 milliseconds             |
++----------------------------+-----------------------------+
+
+In addition, [RFC3208] allows flexibility in implementing the following details:
+
+  * The NAK_RB_IVL timer SHOULD be chosen randomly from the interval [0.05, 0.01] seconds.
+
+  * The source path message (SPM) ambient time interval MUST be implemented such that ambient SPMs are sent when either 50 data packets (ODATA or RDATA packets) have been transmitted, or 0.5 seconds have passed since the last ambient SPM, whichever comes sooner.
+
+  * Section 5.3 of [RFC3208] allows a source to delay RDATA retransmission to accommodate the arrival of additional negative acknowledgments (NAKs). An implementation of this specification SHOULD delay the retransmissions by a time computed according to the following formula.
+
+    RDataDelayTime = 
+   ((RDataSequenceNumber - TrailingSequenceNumber) * 60 msecs) / 
+   ((LastODataSentSequenceNumber - TrailingSequenceNumber + 1))
+
+  * Section 16 of [RFC3208] allows implementations to implement any scheme for advancing the transmit window. Implementations of this specification SHOULD advance the transmit window every TXW_ADV_IVL.
+
+  * Implementations of this specification SHOULD delay transmit window advancement if the sender has pending NAK requests in the range of sequences that the trailing edge of the window is supposed to advance over. In this case, the trailing edge only advances up to the first pending NAK request.
+
+  * Implementations of this specification SHOULD limit the size of application data packets (APDUs) to 64 kilobytes to protect the server from denial of service attacks.
+
+Reference: http://msdn.microsoft.com/en-us/library/cc219051.aspx
+
+
+6 Appendix A: Product Behavior
+==============================
+
+<3> Section 2.1.3: In addition to following the SHOULDs in the required sections of [RFC3208], Windows also follows the MAYs. Exceptions that affect interoperability are noted for the following sections of [RFC3208]:
+
+  * Section 2.1 (transmit window advance – third MAY): Windows does not delay the window advancement based on NAK silence.
+
+  * Section 5.1.1 (MAY): Windows does not use any definition of TXW_MAX_RTE other than that defined in the RFC.
+
+  * Section 5.2 (SHOULD): Windows does not do any negative acknowledgment (NAK) storm detection to protect against a denial of service attack. If a NAK request arrives for a sequence in the current window, a negative acknowledgment confirmation (NCF) packet is sent and followed by repair data (RDATA).
+
+  * Section 5.3 (SHOULD): Windows does not track propagation delays in computing the delay time of RDATA servicing. Prior to servicing an RDATA request, delay time is computed according to the formula in section 2.1.3.1 of this specification.
+
+  * Section 6.1 (MAY in the last paragraph): Windows delivers data to the receiver application only in the order sent, not in the order received.
+
+  * Section 6.3 (transmitting a NAK – MAY): The multicasting of a NAK happens regardless whether the PGM parent is directly connected.
+
+  * Section 9.4 (OPT_JOIN): Windows does not send a late joining option.
+
+  * Section 9.6 (both MAYs): Windows does not use the synchronization (SYN) notification—either to notify the application about the start of the stream or to notify a late joining receiver whether it missed any data or did not start from the beginning of the stream.
+
+  * Section 9.6.1 (MAY): Windows provides statistical information to applications about the data stream; for example, it provides rate and loss information. However, Windows does not provide any abstractions of the stream based on SYNs.
+
+  * Section 9.7.1 (MAY in the last paragraph): Windows does not provide any direct notification of the receipt of a finish (FIN) option. However, the session terminates gracefully when all data has been successfully delivered to the application.
+
+  * Section 9.8.1 (MAY): When the Windows receiver receives an OPT_RST, it terminates the session immediately without attempting to recover any pending data.
+
+  * Section 9.8.2 (SHOULDs): A Windows source sends a session reset option (OPT_RST) only if the sends are canceled; otherwise, the session is closed gracefully. When the sends are canceled, the session is terminated immediately by the source, and subsequent NAKs are not processed.
+
+  * Section 16.1 (third MAY): Windows does not reset TXW_ADV_IVL_TMR if NAKs are received.
+
+  * Section 16.4 (MAY): Windows does not provide any other method of advancing the transmit window other than as specified in section 2.1.3.1 of this specification.
+
+Reference: http://msdn.microsoft.com/en-us/library/b82c952c-d88b-4561-a9cd-a4c3547916b4#id3
+
