@@ -18,17 +18,19 @@ public class udprecv
 		DatagramPacket datagram;
 
 		socket.joinGroup (group);
-		while (true) {
-			datagram = new DatagramPacket (buffer, buffer.length);
-			socket.receive (datagram);
-			System.out.println ("packet: { " +
+		try {
+			while (true) {
+				datagram = new DatagramPacket (buffer, buffer.length);
+				socket.receive (datagram);
+				System.out.println ("packet: { " +
 						  "\"data\": \"" + new String (datagram.getData(), datagram.getOffset(), datagram.getLength()) + "\"" +
 						", \"length\": " + datagram.getLength() + "" +
 						" }");
+			}
+		} finally {
+			socket.leaveGroup (group);
+			socket.close();
 		}
-/* Sequence to cleanup opened socket: */
-//		socket.leaveGroup (address);
-//		socket.close();
 	}
 
 	public static void main (String[] args) throws IOException
