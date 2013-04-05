@@ -13,12 +13,11 @@ public class udprecv
 	public udprecv (String[] args) throws IOException
 	{
 		InetAddress group = InetAddress.getByName (this.group);
-		MulticastSocket socket = new MulticastSocket (this.port);
 		byte[] buffer = new byte[this.max_tpdu];
 		DatagramPacket datagram;
 
-		socket.joinGroup (group);
-		try {
+		try (MulticastSocket socket = new MulticastSocket (this.port)) {
+			socket.joinGroup (group);
 			while (true) {
 				datagram = new DatagramPacket (buffer, buffer.length);
 				socket.receive (datagram);
@@ -27,9 +26,6 @@ public class udprecv
 						", \"length\": " + datagram.getLength() + "" +
 						" }");
 			}
-		} finally {
-			socket.leaveGroup (group);
-			socket.close();
 		}
 	}
 
