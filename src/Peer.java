@@ -28,12 +28,8 @@ public class Peer {
 		this.window = new ReceiveWindow (tsi, max_tpdu, rxw_sqns, rxw_secs, rxw_max_rte);
 	}
 
-	public ReceiveWindow.Returns add (OriginalDataPacket packet) {
-		return window.add (packet);
-	}
-
-	public ReceiveWindow.Returns add (RepairDataPacket packet) {
-		return ReceiveWindow.Returns.RXW_MALFORMED;
+	public ReceiveWindow.Returns add (SocketBuffer skb) {
+		return window.add (skb);
 	}
 
 	public int read (byte[] buffer, int buffer_length) {

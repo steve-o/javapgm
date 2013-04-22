@@ -6,27 +6,27 @@ import java.util.*;
 
 public class GlobalSourceId
 {
-	public static final int SIZE	= 6;
+	public static final int SIZE = 6;
 
 	private byte[] identifier;
 
 	public GlobalSourceId() throws UnknownHostException, NoSuchAlgorithmException {
-		identifier = new byte[ SIZE ];
+		identifier = new byte[SIZE];
 		String hostname = InetAddress.getLocalHost().getHostName();
-		this.setIdentifier (hostname);
+		setIdentifier (hostname);
 	}
 
 	public GlobalSourceId (byte[] bytes) {
-		identifier = new byte[ SIZE ];
-		this.setIdentifier (bytes);
+		identifier = new byte[SIZE];
+		setIdentifier (bytes);
 	}
 
 	public GlobalSourceId (GlobalSourceId gsi) {
 		if (null == gsi)
 			throw new NullPointerException("gsi may not be null");
 
-		identifier = new byte[ SIZE ];
-		this.setIdentifier (gsi.getAsBytes());
+		identifier = new byte[SIZE];
+		setIdentifier (gsi.getAsBytes());
 	}
 
 	public int hashCode() {
@@ -64,7 +64,7 @@ public class GlobalSourceId
 			e.printStackTrace();
 			digest.update (hostname.getBytes ());
 		}
-		this.setIdentifier (digest.digest());
+		setIdentifier (digest.digest());
 	}
 
 	public final void setIdentifier (Inet4Address addr) {

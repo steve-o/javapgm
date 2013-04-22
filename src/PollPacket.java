@@ -4,7 +4,10 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
-public class PollPacket extends PgmPacket {
+public class PollPacket {
+
+	protected SocketBuffer	_skb = null;
+	protected int		_offset = 0;
 
 	private static final int POLL_SQN_OFFSET	= 0;
 	private static final int POLL_ROUND_OFFSET	= 4;
@@ -28,45 +31,46 @@ public class PollPacket extends PgmPacket {
 	private static final int POLL6_MASK_OFFSET	= 36;
 	private static final int POLL6_OPTIONS_OFFSET	= 40;
 
-	private int _poll_offset = 0;
+	private static final int SIZEOF_INADDR		= 4;
+	private static final int SIZEOF_INADDR6		= 16;
 
-	public PollPacket (SocketBuffer skb) {
-		super (skb);
-		this._poll_offset = this._offset + PGM_TYPE_DATA_OFFSET;
-	}
-
-	public static final PollPacket decode (SocketBuffer skb) {
-		return new PollPacket (skb);
+	public PollPacket (SocketBuffer skb, int offset) {
+		this._skb = skb;
+		this._offset = offset;
 	}
 
 	public final long getSequenceNumber() {
-		return this.getUnsignedInt (this._poll_offset + POLL_SQN_OFFSET);
+		return this._skb.getUnsignedInt (this._offset + POLL_SQN_OFFSET);
 	}
 
 	public final int getRound() {
-		return this.getUnsignedShort (this._poll_offset + POLL_ROUND_OFFSET);
+		return this._skb.getUnsignedShort (this._offset + POLL_ROUND_OFFSET);
 	}
 
 	public final int getSubtype() {
-		return this.getUnsignedShort (this._poll_offset + POLL_S_TYPE_OFFSET);
+		return this._skb.getUnsignedShort (this._offset + POLL_S_TYPE_OFFSET);
 	}
 
 	public final int getPathAddressFamilyIndicator() {
-		return this.getUnsignedShort (this._poll_offset + POLL_NLA_AFI_OFFSET);
+		return this._skb.getUnsignedShort (this._offset + POLL_NLA_AFI_OFFSET);
 	}
 
 	public final String getPath() {
 		InetAddress poll_nla = null;
 		try {
 			switch (this.getPathAddressFamilyIndicator()) {
-			case AFI_IP:
-				byte[] in_addr = new byte[ SIZEOF_INADDR ];
-				System.arraycopy (this._buf, this._poll_offset + POLL_NLA_OFFSET, in_addr, 0, in_addr.length);
+			case Packet.AFI_IP:
+				byte[] in_addr = new byte[SIZEOF_INADDR];
+				System.arraycopy (this._skb.getRawBytes(), this._offset + POLL_NLA_OFFSET,
+						  in_addr, 0,
+						  in_addr.length);
 				poll_nla = Inet4Address.getByAddress (in_addr);
 				break;
-			case AFI_IP6:
-				byte[] in6_addr = new byte[ SIZEOF_INADDR6 ];
-				System.arraycopy (this._buf, this._poll_offset + POLL_NLA_OFFSET, in6_addr, 0, in6_addr.length);
+			case Packet.AFI_IP6:
+				byte[] in6_addr = new byte[SIZEOF_INADDR6];
+				System.arraycopy (this._skb.getRawBytes(), this._offset + POLL_NLA_OFFSET,
+						  in6_addr, 0,
+						  in6_addr.length);
 				poll_nla = Inet6Address.getByAddress (in6_addr);
 				break;
 			default:
@@ -81,10 +85,10 @@ public class PollPacket extends PgmPacket {
 
 	public final long getBackoffInterval() {
 		switch (this.getPathAddressFamilyIndicator()) {
-		case AFI_IP:
-			return this.getUnsignedInt (this._poll_offset + POLL_BO_IVL_OFFSET);
-		case AFI_IP6:
-			return this.getUnsignedInt (this._poll_offset + POLL6_BO_IVL_OFFSET);
+		case Packet.AFI_IP:
+			return this._skb.getUnsignedInt (this._offset + POLL_BO_IVL_OFFSET);
+		case Packet.AFI_IP6:
+			return this._skb.getUnsignedInt (this._offset + POLL6_BO_IVL_OFFSET);
 		default:
 			return 0;
 		}
@@ -92,10 +96,10 @@ public class PollPacket extends PgmPacket {
 
 	public final long getRand() {
 		switch (this.getPathAddressFamilyIndicator()) {
-		case AFI_IP:
-			return this.getUnsignedInt (this._poll_offset + POLL_RAND_OFFSET);
-		case AFI_IP6:
-			return this.getUnsignedInt (this._poll_offset + POLL6_RAND_OFFSET);
+		case Packet.AFI_IP:
+			return this._skb.getUnsignedInt (this._offset + POLL_RAND_OFFSET);
+		case Packet.AFI_IP6:
+			return this._skb.getUnsignedInt (this._offset + POLL6_RAND_OFFSET);
 		default:
 			return 0;
 		}
@@ -103,25 +107,25 @@ public class PollPacket extends PgmPacket {
 
 	public final long getMask() {
 		switch (this.getPathAddressFamilyIndicator()) {
-		case AFI_IP:
-			return this.getUnsignedInt (this._poll_offset + POLL_MASK_OFFSET);
-		case AFI_IP6:
-			return this.getUnsignedInt (this._poll_offset + POLL6_MASK_OFFSET);
+		case Packet.AFI_IP:
+			return this._skb.getUnsignedInt (this._offset + POLL_MASK_OFFSET);
+		case Packet.AFI_IP6:
+			return this._skb.getUnsignedInt (this._offset + POLL6_MASK_OFFSET);
 		default:
 			return 0;
 		}
 	}
 
 	public String toString() {
-		GlobalSourceId gsi = this.getGlobalSourceId ();
+		Header header = this._skb.getHeader();
 		return  "{" +
-			 "\"sourcePort\": " + this.getSourcePort() +
-		       ", \"destinationPort\": " + this.getDestinationPort() +
-		       ", \"type\": \"" + this.getTypeName (this.getType()) + "\"" +
-		       ", \"options\": " + this.getOptions() +
-		       ", \"checksum\": 0x" + Integer.toHexString (this.getChecksum()) +
-		       ", \"gsi\": \"" + gsi + "\"" +
-		       ", \"tsduLength\": " + this.getTsduLength() +
+			 "\"sourcePort\": " + header.getSourcePort() +
+		       ", \"destinationPort\": " + header.getDestinationPort() +
+		       ", \"type\": \"" + header.getTypeName() + "\"" +
+		       ", \"options\": " + header.getOptions() +
+		       ", \"checksum\": 0x" + Integer.toHexString (header.getChecksum()) +
+		       ", \"gsi\": \"" + header.getGlobalSourceId() + "\"" +
+		       ", \"tsduLength\": " + header.getTsduLength() +
 		       ", \"pollSqn\": " + this.getSequenceNumber() +
 		       ", \"pollRound\": " + this.getRound() +
 		       ", \"pollSType\": " + this.getSubtype() +

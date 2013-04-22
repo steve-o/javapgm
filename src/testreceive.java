@@ -13,7 +13,7 @@ public class testreceive
 //	String interfaceName = "10.0.9.30";
 	String interfaceName = "eth0";
 	String networkGroup = "239.192.0.1";
-	int udpEncapsulationPort = 7500;
+	int udpEncapsulationPort = 3056;
 	int dataSourcePort = 0;
 	int dataDestinationPort = 7500;
 	int max_tpdu = 1500;
@@ -41,7 +41,6 @@ public class testreceive
 
 		ByteBuffer buffer = ByteBuffer.allocateDirect (this.max_tpdu);
 		SocketBuffer skb;
-		PgmPacket packet;
 /* Workaround Java lack of pass-by-reference for source peer. */
 		Peer[] source = new Peer[1];
 		long data_read = 0;
@@ -61,20 +60,20 @@ public class testreceive
 				selector.selectedKeys().clear();
 				InetSocketAddress src = (InetSocketAddress)dc.receive (buffer);
 				buffer.flip();
-				byte[] packet_bytes = new byte [buffer.remaining()];
-				buffer.get (packet_bytes, 0, packet_bytes.length);
+				skb = new SocketBuffer (buffer.remaining());
+				skb.put (skb.getRawBytes().length);
+				buffer.get (skb.getRawBytes(), 0, skb.getRawBytes().length);
 				buffer.clear();
+				skb.setTimestamp (System.currentTimeMillis());
 /* Rx testing */
 if (Math.random() < 0.25) {
 	System.out.println ("Dropping packet.");
 	continue;
 }
-				skb = new SocketBuffer (packet_bytes, 0, packet_bytes.length);
-				packet = PgmPacket.decode (skb);
-				if (!packet.isValid())
+				if (!Packet.parseUdpEncapsulated (skb))
 					continue;
 				source[0] = null;
-				if (!this.onPgm (packet, src.getAddress(), group, source))
+				if (!this.onPgm (skb, src.getAddress(), group, source))
 					continue;
 /* check whether this source has waiting data */
 				if (null != source[0] && source[0].hasPending()) {
@@ -108,7 +107,7 @@ if (Math.random() < 0.25) {
 	}
 
 	private boolean onUpstream (
-		PgmPacket packet,
+		SocketBuffer skb,
 		InetAddress sourceAddress,
 		InetAddress destinationAddress
 		)
@@ -117,7 +116,7 @@ if (Math.random() < 0.25) {
 	}
 
 	private boolean onPeer (
-		PgmPacket packet,
+		SocketBuffer skb,
 		InetAddress sourceAddress,
 		InetAddress destinationAddress
 		)
@@ -126,7 +125,7 @@ if (Math.random() < 0.25) {
 	}
 
 	private boolean onDownstream (
-		PgmPacket packet,
+		SocketBuffer skb,
 		InetAddress sourceAddress,
 		InetAddress destinationAddress,
 		Peer[] source
@@ -137,38 +136,36 @@ if (Math.random() < 0.25) {
 			return false;
 		}
 
-		if (packet.getDestinationPort() != this.dataDestinationPort) {
+		if (skb.getHeader().getDestinationPort() != this.dataDestinationPort) {
 			System.out.println ("Discarded packet on data-destination port mismatch.");
 			return false;
 		}
 
-		TransportSessionId tsi = packet.getTransportSessionId();
+		TransportSessionId tsi = skb.getHeader().getTransportSessionId();
 		source[0] = this.peers.get (tsi);
 		if (null == source[0]) {
 			source[0] = new Peer (tsi, this.max_tpdu, this.rxw_sqns, this.rxw_secs, this.rxw_max_rte);
 			this.peers.put (tsi, source[0]);
 		}
 
-		source[0].setLastPacketTimestamp (packet.getTimestamp());
+		source[0].setLastPacketTimestamp (skb.getTimestamp());
 
-		switch (packet.getType()) {
-		case PgmPacket.PGM_ODATA:
-			if (!this.onOriginalData (source[0], (OriginalDataPacket)packet))
+		skb.pull (Packet.SIZEOF_PGM_HEADER);
+
+		switch (skb.getHeader().getType()) {
+		case Packet.PGM_ODATA:
+		case Packet.PGM_RDATA:
+			if (!this.onData (source[0], skb))
 				return false;
 			break;
 
-		case PgmPacket.PGM_RDATA:
-			if (!this.onRepairData (source[0], (RepairDataPacket)packet))
+		case Packet.PGM_NCF:
+			if (!this.onNakConfirm (source[0], skb))
 				return false;
 			break;
 
-		case PgmPacket.PGM_NCF:
-			if (!this.onNakConfirm (source[0], packet))
-				return false;
-			break;
-
-		case PgmPacket.PGM_SPM:
-			if (!this.onSourcePathMessage (source[0], packet))
+		case Packet.PGM_SPM:
+			if (!this.onSourcePathMessage (source[0], skb))
 				return false;
 			if (destinationAddress.isMulticastAddress())
 				source[0].setGroupPath (destinationAddress);
@@ -183,65 +180,48 @@ if (Math.random() < 0.25) {
 	}
 
 	private boolean onPgm (
-		PgmPacket packet,
+		SocketBuffer skb,
 		InetAddress sourceAddress,
 		InetAddress destinationAddress,
-		Peer[] source
+		Peer[] source			/* reference to a peer */
 		)
 	{
-		if (packet.isDownstream())
-			return this.onDownstream (packet, sourceAddress, destinationAddress, source);
-		if (packet.getDestinationPort() == this.dataSourcePort)
+		if (skb.getHeader().isDownstream())
+			return this.onDownstream (skb, sourceAddress, destinationAddress, source);
+		if (skb.getHeader().getDestinationPort() == this.dataSourcePort)
 		{
-			if (packet.isUpstream() || packet.isPeer())
+			if (skb.getHeader().isUpstream() || skb.getHeader().isPeer())
 			{
-				return this.onUpstream (packet, sourceAddress, destinationAddress);
+				return this.onUpstream (skb, sourceAddress, destinationAddress);
 			}
 		}
-		else if (packet.isPeer())
-			return this.onPeer (packet, sourceAddress, destinationAddress);
+		else if (skb.getHeader().isPeer())
+			return this.onPeer (skb, sourceAddress, destinationAddress);
 
 		System.out.println ("Discarded unknown PGM packet.");
 		return false;
 	}
 
-	private boolean onOriginalData (
+	private boolean onData (
 		Peer source,
-		OriginalDataPacket packet
+		SocketBuffer skb
 		)
 	{
 		int msgCount = 0;
 		boolean flushNaks = false;
 
-		final ReceiveWindow.Returns addStatus = source.add (packet);
+		skb.setOriginalDataOffset (skb.getDataOffset());
+
+		final int opt_total_length = skb.getAsOriginalData().getOptionTotalLength();
+
+/* advance data pointer to payload */
+		skb.pull (OriginalData.SIZEOF_DATA_HEADER + opt_total_length);
+
+		if (opt_total_length > 0)
+			Packet.parseOptionExtensions (skb, skb.getDataOffset());
+
+		final ReceiveWindow.Returns addStatus = source.add (skb);
 System.out.println ("ReceiveWindow.add returned " + addStatus);
-
-		switch (addStatus) {
-		case RXW_MISSING:
-			flushNaks = true;
-		case RXW_INSERTED:
-		case RXW_APPENDED:
-			msgCount++;
-			break;
-
-		case RXW_DUPLICATE:
-		case RXW_MALFORMED:
-		case RXW_BOUNDS:
-			return false;
-		}
-
-		return true;
-	}
-
-	private boolean onRepairData (
-		Peer source,
-		RepairDataPacket packet
-		)
-	{
-		int msgCount = 0;
-		boolean flushNaks = false;
-
-		final ReceiveWindow.Returns addStatus = source.add (packet);
 
 		switch (addStatus) {
 		case RXW_MISSING:
@@ -262,7 +242,7 @@ System.out.println ("ReceiveWindow.add returned " + addStatus);
 
 	private boolean onNakConfirm (
 		Peer source,
-		PgmPacket packet
+		SocketBuffer skb
 		)
 	{
 		return true;
@@ -270,7 +250,7 @@ System.out.println ("ReceiveWindow.add returned " + addStatus);
 
 	private boolean onSourcePathMessage (
 		Peer source,
-		PgmPacket packet
+		SocketBuffer skb
 		)
 	{
 		return true;

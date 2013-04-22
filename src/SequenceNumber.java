@@ -1,99 +1,132 @@
 /* Wrapper for Java primitives data type to handle window semantics of
  * comparison and wrapping.
  */
+
+//import static Preconditions.checkArgument;
+//import static Preconditions.checkNotNull;
+//import static UnsignedInts.INT_MASK;
+//import static UnsignedInts.compare;
+//import static UnsignedInts.toLong;
+
+import javax.annotation.CheckReturnValue;
+import javax.annotation.Nullable;
+
 public final class SequenceNumber extends Number implements Comparable<SequenceNumber> {
+	public static final SequenceNumber ZERO = fromIntBits (0);
+	public static final SequenceNumber ONE = fromIntBits (1);
+	public static final SequenceNumber MAX_VALUE = fromIntBits (-1);
 
-	public static final long   MIN_VALUE = 0L;
-	public static final long   MAX_VALUE = 0xffffffffL;
+	private final int value;
 
-	private long value;
-
-	public SequenceNumber (long value) {
-		this.assign (value);
+	private SequenceNumber (int value) {
+		this.value = value & 0xffffffff;
 	}
 
-	public void assign (long value) {
-		this.value = value;
+	public static SequenceNumber fromIntBits (int bits) {
+		return new SequenceNumber (bits);
 	}
 
-	public void assign (SequenceNumber sequence) {
-		this.assign (sequence.longValue());
+	public static SequenceNumber valueOf (long value) {
+		Preconditions.checkArgument ((value & UnsignedInts.INT_MASK) == value,
+			"value (%s) is outside the range for an unsigned integer value", value);
+		return fromIntBits ((int)value);
 	}
 
+	public static SequenceNumber valueOf (String string) {
+		return valueOf (string, 10);
+	}
+
+	public static SequenceNumber valueOf (String string, int radix) {
+		return fromIntBits (UnsignedInts.parseUnsignedInt (string, radix));
+	}
+
+	@CheckReturnValue
+	public SequenceNumber plus (int val) {
+		return fromIntBits (this.value + val);
+	}
+
+	@CheckReturnValue
+	public SequenceNumber plus (SequenceNumber val) {
+		return fromIntBits (this.value + Preconditions.checkNotNull (val).value);
+	}
+
+	@CheckReturnValue
+	public SequenceNumber minus (int val) {
+		return fromIntBits (this.value - val);
+	}
+
+	@CheckReturnValue
+	public SequenceNumber minus (SequenceNumber val) {
+		return fromIntBits (this.value - Preconditions.checkNotNull (val).value);
+	}
+
+	@Override
 	public int intValue() {	/* Number interface */
-		return -1;
+		return this.value;
 	}
 
+	@Override
 	public long longValue() {
-		return value;
+		return UnsignedInts.toLong (this.value);
 	}
 
+	@Override
 	public float floatValue() {	/* Number interface */
-		return (float)-1.0;
+		return longValue();
 	}
 
+	@Override
 	public double doubleValue() {	/* Number interface */
-		return (double)-1.0;
+		return longValue();
 	}
 
-	public String toString() {
-		return String.valueOf (value);
+	@Override
+	public int compareTo (SequenceNumber other) {
+		Preconditions.checkNotNull (other);
+		return UnsignedInts.compare (this.value, other.value);
 	}
 
+	@Override
 	public int hashCode() {
-		return (int)value;
+		return this.value;
 	}
 
-	public boolean equals (Object obj) {
+	@Override
+	public boolean equals (@Nullable Object obj) {
 		if (obj instanceof SequenceNumber) {
-			return value == ((SequenceNumber)obj).longValue();
+			SequenceNumber other = (SequenceNumber)obj;
+			return this.value == other.value;
 		}
 		return false;
 	}
 
-	public boolean lt (SequenceNumber anotherSqn) {
-		long thisVal = this.value;
-		long anotherVal = anotherSqn.value;
-		return (thisVal - anotherVal) < 0;
+	@Override
+	public String toString() {
+		return toString (10);
 	}
 
-	public boolean lte (SequenceNumber anotherSqn) {
-		long thisVal = this.value;
-		long anotherVal = anotherSqn.value;
-		return (thisVal == anotherVal) || ((thisVal - anotherVal) < 0);
+	public String toString (int radix) {
+		return UnsignedInts.toString (value, radix);
 	}
 
-	public boolean gt (SequenceNumber anotherSqn) {
-		long thisVal = this.value;
-		long anotherVal = anotherSqn.value;
-		return (anotherVal - thisVal) < 0;
+	public boolean lt (SequenceNumber other) {
+		Preconditions.checkNotNull (other);
+		return (this.value - other.value) < 0;
 	}
 
-	public boolean gte (SequenceNumber anotherSqn) {
-		long thisVal = this.value;
-		long anotherVal = anotherSqn.value;
-		return (thisVal == anotherVal) || ((anotherVal - thisVal) < 0);
+	public boolean lte (SequenceNumber other) {
+		Preconditions.checkNotNull (other);
+		return (this.value == other.value) || ((this.value - other.value) < 0);
 	}
 
-	public int compareTo (SequenceNumber anotherSqn) {
-		return this.lt (anotherSqn) ? -1 : (this.equals (anotherSqn) ? 0 : 1);
+	public boolean gt (SequenceNumber other) {
+		Preconditions.checkNotNull (other);
+		return (other.value - this.value) < 0;
 	}
 
-	public SequenceNumber increment() {
-		if (this.MAX_VALUE == this.value) {
-			this.value = this.MIN_VALUE;
-		} else {
-			this.value++;
-		}
-		return this;
-	}
-
-	public long nextValue() {
-		if (this.MAX_VALUE == this.value) {
-			return this.MIN_VALUE;
-		} else {
-			return this.value + 1;
-		}
+	public boolean gte (SequenceNumber other) {
+		Preconditions.checkNotNull (other);
+		return (this.value == other.value) || ((other.value - this.value) < 0);
 	}
 
 	public static final int SIZE = 32;
