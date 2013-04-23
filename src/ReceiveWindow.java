@@ -50,6 +50,11 @@ public class ReceiveWindow {
 		{
 			this.pktState = pktState;
 		}
+
+		public State()
+		{
+			this (PacketState.PKT_ERROR_STATE);
+		}
 	}
 
 	protected Queue<SocketBuffer>		backoffQueue;
@@ -181,6 +186,10 @@ public class ReceiveWindow {
 
 /* RxPacket array */
 		this.alloc = alloc_sqns;
+
+		this.backoffQueue = new LinkedList<SocketBuffer> ();
+		this.waitNakConfirmQueue = new LinkedList<SocketBuffer> ();
+		this.waitDataQueue = new LinkedList<SocketBuffer> ();
 	}
 
 /* Returns:
@@ -199,7 +208,7 @@ public class ReceiveWindow {
 					"\"skb\": " + skb + "" +
 					" )");
 
-		skb.setControlBuffer (new State (PacketState.PKT_ERROR_STATE));
+		skb.setControlBuffer (new State ());
 		skb.setSequenceNumber (skb.getAsOriginalData().getSequenceNumber());
 
 /* protocol sanity check: valid trail pointer wrt. sequence */
@@ -322,9 +331,10 @@ System.out.println ("updating trail");
 		this.lead = this.lead.plus (1);
 
 		SocketBuffer skb = new SocketBuffer (this.max_tpdu);
-		State state = (State)skb.getControlBuffer();
+		skb.setControlBuffer (new State ());
 		skb.setTimestamp (System.currentTimeMillis());
 		skb.setSequenceNumber (this.lead);
+		State state = (State)skb.getControlBuffer();
 		state.nakRandomBackoffExpiry = calculateNakRandomBackoffInterval();
 
 		if (!isFirstOfTransmissionGroup (this.lead)) {
