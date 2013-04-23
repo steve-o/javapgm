@@ -656,13 +656,16 @@ System.out.println ("read");
  */
 	private int removeTrail()
 	{
+System.out.println ("removeTrail");
 		SocketBuffer skb = peek (this.trail);
+System.out.println ("trail " + this.trail + " = " + skb);
 		clearPacketState (skb);
 		this.size -= skb.getHeader().getTsduLength();
 /* remove reference to skb */
 		skb = null;
+		final boolean data_loss = this.trail.equals (this.commitLead);
 		this.trail = this.trail.plus (1);
-		if (this.trail.equals (this.commitLead)) {
+		if (data_loss) {
 /* data-loss */
 			this.commitLead = this.commitLead.plus (1);
 			this.cumulativeLosses++;

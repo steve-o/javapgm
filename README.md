@@ -22,18 +22,24 @@ multicast loop rules.  For example using the OpenPGM C package:
 Monitor the slightly verbose output.
 ```
   ...
+  add ( "skb":  { "timestamp": 1366746451692, "tsi": "169.232.35.188.84.158.39986", "sequence": null } )
   defining window
-  sequence: 0, lead: -1
+  sequence: 87726, lead: 87725
+  append
   ReceiveWindow.add returned RXW_APPENDED
   New pending data.
-  #1
   flushPeersPending
   read
   incomingRead
   incomingReadApdu
-  peer read=32
-  apdu_length=32
-  msg: { "data": "Wed, 20 Mar 2013 13:40:37 -0400^@", "length": 32 )
+  Received 1 SKBs
+  #1 from 169.232.35.188.84.158.39986: "Tue, 23 Apr 2013 15:47:31 -0400"
+  timer pending ...
+  timer pending ...
+  timer pending ...
+  timer pending ...
+  timer pending ...
+
 ```
 
 Resources
