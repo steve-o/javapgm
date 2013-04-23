@@ -611,7 +611,7 @@ System.out.println ("append");
  *
  * returns -1 on nothing read, returns length of bytes read, 0 is a valid read length.
  */
-	public int read (byte[] buffer, int buffer_length)
+	public int read (List<SocketBuffer> skbs)
 	{
 System.out.println ("read");
 		int bytes_read = -1;
@@ -621,7 +621,7 @@ System.out.println ("read");
 		State state = (State)skb.getControlBuffer();
 		switch (state.pktState) {
 		case PKT_HAVE_DATA_STATE:
-			bytes_read = incomingRead (buffer, buffer_length);
+			bytes_read = incomingRead (skbs);
 			break;
 		case PKT_LOST_DATA_STATE:
 /* do not purge in situ sequence */
@@ -680,7 +680,7 @@ System.out.println ("read");
  *
  * returns count of bytes read.
  */
-	private int incomingRead (byte[] buffer, int buffer_length)
+	private int incomingRead (List<SocketBuffer> skbs)
 	{
 		System.out.println ("incomingRead");
 		int bytes_read = 0;
@@ -690,12 +690,12 @@ System.out.println ("read");
 			SocketBuffer skb = peek (this.commitLead);
 			if (isApduComplete (skb.isFragment() ? skb.getFragmentOption().getFirstSequenceNumber() : skb.getSequenceNumber()))
 			{
-				bytes_read += incomingReadApdu (buffer, bytes_read, buffer_length - bytes_read);
+				bytes_read += incomingReadApdu (skbs);
 				data_read  ++;
 			} else {
 				break;
 			}
-		} while (bytes_read <= buffer_length && !isIncomingEmpty());
+		} while (!isIncomingEmpty());
 
 		this.bytesDelivered    += bytes_read;
 		this.messagesDelivered += data_read;
@@ -796,7 +796,7 @@ System.out.println ("read");
 /* read one APDU consisting of one or more TPDUs.  target array is guaranteed
  * to be big enough to store complete APDU.
  */
-	private int incomingReadApdu (byte[] buffer, int offset, int length)
+	private int incomingReadApdu (List<SocketBuffer> skbs)
 	{
 		System.out.println ("incomingReadApdu");
 		int contiguous_length = 0;
@@ -806,9 +806,7 @@ System.out.println ("read");
 
 		do {
 			setPacketState (skb, PacketState.PKT_COMMIT_DATA_STATE);
-			System.arraycopy (skb.getAsOriginalData().getData(), 0,
-					  buffer, offset,
-					  skb.getHeader().getTsduLength());
+			skbs.add (skb);
 			contiguous_length += skb.getHeader().getTsduLength();
 			this.commitLead = this.commitLead.plus (1);
 			if (apdu_len == contiguous_length)

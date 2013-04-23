@@ -32,8 +32,8 @@ public class Peer {
 		return window.add (skb);
 	}
 
-	public int read (byte[] buffer, int buffer_length) {
-		return this.window.read (buffer, buffer_length);
+	public int read (List<SocketBuffer> skbs) {
+		return this.window.read (skbs);
 	}
 
 	public TransportSessionId getTransportSessionId() {

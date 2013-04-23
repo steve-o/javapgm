@@ -66,6 +66,10 @@ public class SocketBuffer {
 		return this._data;
 	}
 
+	public int getLength() {
+		return this._len;
+	}
+
 	public void put (int len) {
 		this._tail += len;
 		this._len += len;
