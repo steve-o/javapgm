@@ -230,10 +230,13 @@ public class ReceiveWindow {
 		}
 
 		if (skb.getSequenceNumber().lt (this.commitLead)) {
-			if (skb.getSequenceNumber().gte (this.trail))
+			if (skb.getSequenceNumber().gte (this.trail)) {
+				System.out.println ("Duplicate packet from window");
 				return Returns.RXW_DUPLICATE;
-			else
+			} else {
+				System.out.println ("Duplicate packet before window");
 				return Returns.RXW_BOUNDS;
+			}
 		}
 
 System.out.println ("sequence: " + skb.getSequenceNumber() + ", lead: " + this.lead);
@@ -475,6 +478,7 @@ System.out.println ("updating trail");
  */
 	private Returns insert (SocketBuffer skb)
 	{
+System.out.println ("insert");
 		State state = null;
 
 		if (isInvalidVarPktLen (skb) || isInvalidPayloadOption (skb)) {
@@ -535,6 +539,7 @@ System.out.println ("updating trail");
  */
 	private Returns append (SocketBuffer skb)
 	{
+System.out.println ("append");
 		if (isInvalidVarPktLen (skb) || isInvalidPayloadOption (skb)) {
 			System.out.println ("Invalid packet");
 			return Returns.RXW_MALFORMED;
@@ -542,9 +547,10 @@ System.out.println ("updating trail");
 
 		if (isFull()) {
 			if (isCommitEmpty()) {
-				System.out.println ("Receive window full on new data.");
+				System.out.println ("Receive window full on new data, pulling trail.");
 				removeTrail();
 			} else {
+				System.out.println ("Receive window full with commit data.");
 				return Returns.RXW_BOUNDS;
 			}
 		}
@@ -563,6 +569,7 @@ System.out.println ("updating trail");
 			this.pdata.add (index, skb);
 
 			setPacketState (skb, PacketState.PKT_LOST_DATA_STATE);
+			System.out.println ("APDU already declared lost, ignoring TPDU.");
 			return Returns.RXW_BOUNDS;
 		}
 
