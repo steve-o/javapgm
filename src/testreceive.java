@@ -17,12 +17,15 @@ public class testreceive
 	int dataSourcePort = 0;
 	int dataDestinationPort = 7500;
 	int max_tpdu = 1500;
-	int rxw_sqns = 3; //128;
+	int rxw_sqns = 128;
 	int rxw_secs = 0;
 	long rxw_max_rte = 0;
 	long lastCommit = 0;
+	long nextPoll = 0;
+	long peerExpiration = 300 * 1000;
 	boolean canReceiveData = true;
 	boolean isReset = false;
+	boolean isPendingRead = false;
 	DatagramChannel dc = null;
 	ByteBuffer buffer = null;
 	SocketBuffer rx_buffer = null;
@@ -112,7 +115,13 @@ public class testreceive
 			return IoStatus.IO_STATUS_RESET;
 		}
 
-/* timers */
+/* timer status */
+		if (timerCheck() &&
+		    !timerDispatch())
+		{
+/* block on send-in-recv */
+			status = IoStatus.IO_STATUS_RATE_LIMITED;
+		}
 
 		if (0 == ++(this.lastCommit))
 			++(this.lastCommit);
@@ -133,10 +142,10 @@ public class testreceive
 				this.buffer.clear();
 				this.rx_buffer.setTimestamp (System.currentTimeMillis());
 /* Rx testing */
-//if (Math.random() < 0.25) {
-//	System.out.println ("Dropping packet.");
-//	continue;
-//}
+if (Math.random() < 0.25) {
+	System.out.println ("Dropping packet.");
+	continue;
+}
 				if (!Packet.parseUdpEncapsulated (this.rx_buffer))
 					break;
 				this.source[0] = null;
@@ -337,7 +346,10 @@ System.out.println ("flushPeersPending");
 				peer.removeCommit();
 			final int peer_bytes = peer.read (skbs);
 			if (peer.hasDataLoss())
+			{
 				this.isReset = true;
+				peer.clearDataLoss();
+			}
 			if (peer_bytes > 0) {
 				bytes_read += peer_bytes;
 				data_read++;
@@ -351,6 +363,289 @@ System.out.println ("flushPeersPending");
 			peer.clearPendingLinkData();
 		}
 		return bytes_read;
+	}
+
+	private boolean timerCheck()
+	{
+		final long now = System.currentTimeMillis();
+		final boolean hasExpired = now >= this.nextPoll;
+		return hasExpired;
+	}
+
+	private boolean timerDispatch()
+	{
+		final long now = System.currentTimeMillis();
+		long nextExpiration = 0;
+
+		System.out.println ("timerDispatch");
+
+		if (true) {
+			if (!checkPeerState (now))
+				return false;
+			nextExpiration = minReceiverExpiration (now + this.peerExpiration);
+		}
+
+		if (false) {
+		}
+		else
+			this.nextPoll = nextExpiration;
+
+		return true;
+	}
+
+	private boolean checkPeerState (long now)
+	{
+		System.out.println ("checkPeerState");
+
+		if (this.peers.isEmpty())
+			return true;
+
+		for (Enumeration<Peer> it = this.peers.elements(); it.hasMoreElements();)
+		{
+			Peer peer = it.nextElement();
+			if (peer.hasSpmrExpiration() &&
+			    now >= peer.getSpmrExpiration())
+			{
+				if (!sendSpmr (peer))
+					return false;
+				peer.clearSpmrExpiration();
+			}
+
+			if (!peer.getNakBackoffQueue().isEmpty() &&
+			    now >= peer.firstNakBackoffExpiration())
+			{
+				if (!nakBackoffState (peer, now))
+					return false;
+			}
+
+			if (!peer.getWaitNakConfirmQueue().isEmpty() &&
+			    now >= peer.firstNakRepeatExpiration())
+			{
+				nakRepeatState (peer, now);
+			}
+
+			if (!peer.getWaitDataQueue().isEmpty() &&
+			    now >= peer.firstNakRepairDataExpiration())
+			{
+				nakRepairDataState (peer, now);
+			}
+
+/* expired, remove from hash table and linked list */
+			if (now >= peer.getExpiration())
+			{
+				if (peer.hasPendingLinkData())
+				{
+					System.out.println ("Peer expiration postponed due to committing data.");
+					peer.setExpiration (peer.getExpiration() + this.peerExpiration);
+				}
+				else if (peer.hasCommitData())
+				{
+					System.out.println ("Peer expiration postoned due to comitted data.");
+					peer.setExpiration (peer.getExpiration() + this.peerExpiration);
+				}
+				else
+				{
+					System.out.println ("Peer expired.");
+					this.peers.remove (peer);
+					peer = null;
+				}
+			}
+		}
+
+/* check for waiting contiguous packets */
+		if (!this.peers_pending.isEmpty() && !this.isPendingRead)
+		{
+			System.out.println ("Signal receiver thread.");
+			this.isPendingRead = true;
+		}
+
+		return true;
+	}
+
+	private long minReceiverExpiration (long expiration)
+	{
+		System.out.println ("minReceiverExpiration");
+
+		if (this.peers.isEmpty())
+			return expiration;
+
+		for (Enumeration<Peer> it = this.peers.elements(); it.hasMoreElements();)
+		{
+			Peer peer = it.nextElement();
+			if (peer.hasSpmrExpiration() &&
+			    expiration >= peer.getSpmrExpiration())
+			{
+				expiration = peer.getSpmrExpiration();
+			}
+
+			if (!peer.getNakBackoffQueue().isEmpty() &&
+			    expiration >= peer.firstNakBackoffExpiration())
+			{
+				expiration = peer.firstNakBackoffExpiration();
+			}
+
+			if (!peer.getWaitNakConfirmQueue().isEmpty() &&
+			    expiration >= peer.firstNakRepeatExpiration())
+			{
+				expiration = peer.firstNakRepeatExpiration();
+			}
+
+			if (!peer.getWaitDataQueue().isEmpty() &&
+			    expiration >= peer.firstNakRepairDataExpiration())
+			{
+				expiration = peer.firstNakRepairDataExpiration();
+			}
+		}
+
+		return expiration;
+	}
+
+	private boolean nakBackoffState (Peer peer, long now)
+	{
+		int droppedInvalid = 0;
+
+		System.out.println ("nakBackoffState");
+
+		Queue<SocketBuffer> nakBackoffQueue = peer.getNakBackoffQueue();
+		if (nakBackoffQueue.isEmpty()) {
+			System.out.println ("Backoff queue is empty in nak_rb_state.");
+			return true;
+		}
+
+		final boolean isValidNla = peer.hasValidNla();
+
+		{
+			ArrayList<SequenceNumber> nakList = new ArrayList<SequenceNumber>();
+
+/* select NAK generation */
+
+			if (!nakList.isEmpty()) {
+				if (nakList.size() > 1 && !sendNakList (peer, nakList))
+					return false;
+				else if (!sendNak (peer, nakList.get (0)))
+					return false;
+			}
+		}
+
+		if (droppedInvalid > 0)
+		{
+			System.out.println ("Dropped " + droppedInvalid + " messages due to invalid NLA.");
+
+			if (peer.hasDataLoss() &&
+			    !peer.hasPendingLinkData())
+			{
+				this.isReset = true;
+				peer.clearDataLoss();
+				setPendingPeer (peer);
+			}
+		}
+
+		if (!nakBackoffQueue.isEmpty()) {
+			final long secs = (peer.firstNakBackoffExpiration() - now) / 1000;
+			System.out.println ("Next expiration set in " + secs + " seconds.");
+		} else {
+			System.out.println ("NAK backoff queue empty.");
+		}
+		return true;
+	}
+
+	private void nakRepeatState (Peer peer, long now)
+	{
+		int droppedInvalid = 0;
+		int dropped = 0;
+
+		System.out.println ("NakRepeatState");
+
+		Queue<SocketBuffer> waitNakConfirmQueue = peer.getWaitNakConfirmQueue();
+
+		final boolean isValidNla = peer.hasValidNla();
+
+		if (droppedInvalid > 0)
+			System.out.println ("Dropped " + droppedInvalid + " message due to invalid NLA.");
+
+		if (dropped > 0)
+			System.out.println ("Dropped " + dropped + " messages due to NCF cancellation.");
+
+		if (peer.hasDataLoss() &&
+		    !peer.hasPendingLinkData())
+		{
+			this.isReset = true;
+			peer.clearDataLoss();
+			setPendingPeer (peer);
+		}
+
+		if (!waitNakConfirmQueue.isEmpty())
+		{
+			if (peer.firstNakRepeatExpiration() > now) {
+				final long seconds = (peer.firstNakRepeatExpiration() - now) / 1000;
+				System.out.println ("Next expiration set in " + seconds + " seconds.");
+			} else {
+				final long seconds = (now - peer.firstNakRepeatExpiration()) / 1000;
+				System.out.println ("Next expiration set in -" + seconds + " seconds.");
+			}
+		}
+		else
+		{
+			System.out.println ("Wait NCF queue empty.");
+		}
+	}
+
+	private void nakRepairDataState (Peer peer, long now)
+	{
+		int droppedInvalid = 0;
+		int dropped = 0;
+
+		System.out.println ("nakRepairDataState");
+
+		Queue<SocketBuffer> waitDataQueue = peer.getWaitDataQueue();
+
+		final boolean isValidNla = peer.hasValidNla();
+
+		if (droppedInvalid > 0)
+			System.out.println ("Dropped " + droppedInvalid + " message due to invalid NLA.");
+
+		if (dropped > 0)
+			System.out.println ("Dropped " + dropped + " messages due to data cancellation.");
+
+		if (peer.hasDataLoss() &&
+		    !peer.hasPendingLinkData())
+		{
+			this.isReset = true;
+			peer.clearDataLoss();
+			setPendingPeer (peer);
+		}
+
+		if (!waitDataQueue.isEmpty()) {
+			final long seconds = (peer.firstNakRepairDataExpiration() - now) / 1000;
+			System.out.println ("Next expiration set in " + seconds + " seconds.");
+		} else {
+			System.out.println ("Wait data queue empty.");
+		}
+	}
+
+	private void setPendingPeer (Peer peer)
+	{
+		if (peer.hasPendingLinkData()) return;
+		this.peers_pending.addFirst (peer);
+		peer.setPendingLinkData();
+	}
+
+	private boolean sendSpmr (Peer peer)
+	{
+		System.out.println ("sendSpmr");
+		return true;
+	}
+
+	private boolean sendNak (Peer peer, SequenceNumber sequence)
+	{
+		System.out.println ("sendNak");
+		return true;
+	}
+
+	private boolean sendNakList (Peer peer, ArrayList<SequenceNumber> sqn_list)
+	{
+		System.out.println ("sendNakList");
+		return true;
 	}
 
 	public static void main (String[] args) throws IOException

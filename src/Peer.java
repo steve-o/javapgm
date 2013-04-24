@@ -9,12 +9,15 @@ public class Peer {
 
 	private TransportSessionId tsi = null;
 	private InetAddress groupPath = null;
+	private InetAddress nla = null, local_nla = null;
 	private long lastPacketTimestamp = 0;
 	private ReceiveWindow window;
 	private boolean hasPendingLinkData = false;
 	private long lastCommit = 0;
 	private long lostCount = 0;
 	private long lastCumulativeLosses = 0;
+	private long spmrExpiration = 0;
+	private long expiration = 0;
 
 	public Peer (
 		TransportSessionId tsi,
@@ -44,6 +47,10 @@ public class Peer {
 		this.groupPath = groupPath;
 	}
 
+	public boolean hasValidNla() {
+		return (null != this.nla);
+	}
+
 	public void setLastPacketTimestamp (long lastPacketTimestamp) {
 		this.lastPacketTimestamp = lastPacketTimestamp;
 	}
@@ -51,8 +58,8 @@ public class Peer {
 /* edge trigerred has receiver pending events
  */
 	public boolean hasPending() {
-		if (!this.hasPendingLinkData && window.hasEvent()) {
-			window.clearEvent();
+		if (!hasPendingLinkData() && this.window.hasEvent()) {
+			this.window.clearEvent();
 			return true;
 		}
 		return false;
@@ -64,6 +71,10 @@ public class Peer {
 
 	public void clearPendingLinkData() {
 		this.hasPendingLinkData = false;
+	}
+
+	public boolean hasPendingLinkData() {
+		return this.hasPendingLinkData;
 	}
 
 	public boolean hasLastCommit() {
@@ -82,13 +93,61 @@ public class Peer {
 		this.window.removeCommit();
 	}
 
+	public boolean hasCommitData() {
+		return this.window.hasCommitData();
+	}
+
 	public boolean hasDataLoss() {
-		if (this.lastCumulativeLosses != window.getCumulativeLosses()) {
-			this.lostCount = window.getCumulativeLosses() - this.lastCumulativeLosses;
-			this.lastCumulativeLosses = window.getCumulativeLosses();
-			return true;
-		}
-		return false;
+		return (this.lastCumulativeLosses != this.window.getCumulativeLosses());
+	}
+
+	public void clearDataLoss() {
+		this.lostCount = this.window.getCumulativeLosses() - this.lastCumulativeLosses;
+		this.lastCumulativeLosses = this.window.getCumulativeLosses();
+	}
+
+	public boolean hasSpmrExpiration() {
+		return (this.spmrExpiration > 0);
+	}
+
+	public long getSpmrExpiration() {
+		return this.spmrExpiration;
+	}
+
+	public void clearSpmrExpiration() {
+		this.spmrExpiration = 0;
+	}
+
+	public Queue<SocketBuffer> getNakBackoffQueue() {
+		return this.window.getNakBackoffQueue();
+	}
+
+	public long firstNakBackoffExpiration() {
+		return this.window.firstNakBackoffExpiration();
+	}
+
+	public Queue<SocketBuffer> getWaitNakConfirmQueue() {
+		return this.window.getWaitNakConfirmQueue();
+	}
+
+	public long firstNakRepeatExpiration() {
+		return this.window.firstNakRepeatExpiration();
+	}
+
+	public Queue<SocketBuffer> getWaitDataQueue() {
+		return this.window.getWaitDataQueue();
+	}
+
+	public long firstNakRepairDataExpiration() {
+		return this.window.firstNakRepairDataExpiration();
+	}
+
+	public long getExpiration() {
+		return this.expiration;
+	}
+
+	public void setExpiration (long expiration) {
+		this.expiration = expiration;
 	}
 
 	public String toString() {

@@ -37,9 +37,9 @@ public class ReceiveWindow {
 	protected TransportSessionId		tsi;
 
 	private class State implements ControlBuffer {
-		long				nakRandomBackoffExpiry;
-		long				nakRepeatExpiry;
-		long				nakRepairDataExpiry;
+		long				nakBackoffExpiration;
+		long				nakRepeatExpiration;
+		long				nakRepairDataExpiration;
 		PacketState			pktState;
 		int				nakTransmitCount;
 		int				nakConfirmRetryCount;
@@ -57,7 +57,7 @@ public class ReceiveWindow {
 		}
 	}
 
-	protected Queue<SocketBuffer>		backoffQueue;
+	protected Queue<SocketBuffer>		nakBackoffQueue;
 	protected Queue<SocketBuffer>		waitNakConfirmQueue;
 	protected Queue<SocketBuffer>		waitDataQueue;
 
@@ -91,6 +91,36 @@ public class ReceiveWindow {
 	protected int				size;
 	protected int				alloc;
 	protected Vector<SocketBuffer>		pdata = null;
+
+	public Queue<SocketBuffer> getNakBackoffQueue() {
+		return this.nakBackoffQueue;
+	}
+
+	public long firstNakBackoffExpiration() {
+		final SocketBuffer skb = this.nakBackoffQueue.peek();
+		final State state = (State)skb.getControlBuffer();
+		return state.nakBackoffExpiration;
+	}
+
+	public Queue<SocketBuffer> getWaitNakConfirmQueue() {
+		return this.waitNakConfirmQueue;
+	}
+
+	public long firstNakRepeatExpiration() {
+		final SocketBuffer skb = this.waitNakConfirmQueue.peek();
+		final State state = (State)skb.getControlBuffer();
+		return state.nakRepeatExpiration;
+	}
+
+	public Queue<SocketBuffer> getWaitDataQueue() {
+		return this.waitDataQueue;
+	}
+
+	public long firstNakRepairDataExpiration() {
+		final SocketBuffer skb = this.waitDataQueue.peek();
+		final State state = (State)skb.getControlBuffer();
+		return state.nakRepairDataExpiration;
+	}
 
 	private SocketBuffer peek (SequenceNumber sequence)
 	{
@@ -187,7 +217,7 @@ public class ReceiveWindow {
 /* RxPacket array */
 		this.alloc = alloc_sqns;
 
-		this.backoffQueue = new LinkedList<SocketBuffer> ();
+		this.nakBackoffQueue = new LinkedList<SocketBuffer> ();
 		this.waitNakConfirmQueue = new LinkedList<SocketBuffer> ();
 		this.waitDataQueue = new LinkedList<SocketBuffer> ();
 	}
@@ -338,7 +368,7 @@ System.out.println ("updating trail");
 		skb.setTimestamp (System.currentTimeMillis());
 		skb.setSequenceNumber (this.lead);
 		State state = (State)skb.getControlBuffer();
-		state.nakRandomBackoffExpiry = calculateNakRandomBackoffInterval();
+		state.nakBackoffExpiration = calculateNakRandomBackoffInterval();
 
 		if (!isFirstOfTransmissionGroup (this.lead)) {
 			SocketBuffer first = peek (transmissionGroupSequenceNumber (this.lead));
@@ -602,6 +632,11 @@ System.out.println ("append");
 		}
 	}
 
+	public boolean hasCommitData()
+	{
+		return (this.committedCount > 0);
+	}
+
 /* flush packets but instead of calling on_data append the contiguous data packets
  * to the provided scatter/gather vector.
  *
@@ -853,7 +888,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 
 		switch (newState) {
 		case PKT_BACK_OFF_STATE:
-			this.backoffQueue.offer (skb);
+			this.nakBackoffQueue.offer (skb);
 			break;
 		case PKT_WAIT_NCF_STATE:
 			this.waitNakConfirmQueue.offer (skb);
@@ -890,7 +925,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 
 		switch (state.pktState) {
 		case PKT_BACK_OFF_STATE:
-			this.backoffQueue.remove (skb);
+			this.nakBackoffQueue.remove (skb);
 			break;
 		case PKT_WAIT_NCF_STATE:
 			this.waitNakConfirmQueue.remove (skb);
