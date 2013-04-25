@@ -157,6 +157,10 @@ public class Peer {
 		return this.window.firstNakRepeatExpiration();
 	}
 
+	public void setWaitNakConfirmState (SocketBuffer skb) {
+		this.window.setWaitNakConfirmState (skb);
+	}
+
 	public Queue<SocketBuffer> getWaitDataQueue() {
 		return this.window.getWaitDataQueue();
 	}

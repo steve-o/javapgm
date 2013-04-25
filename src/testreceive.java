@@ -579,6 +579,7 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 
 /* select NAK generation */
 
+System.out.println ("nakBackoffQueue contains " + nakBackoffQueue.size() + " SKBs.");
 			for (Iterator<SocketBuffer> it = nakBackoffQueue.iterator(); it.hasNext();)
 			{
 				SocketBuffer skb = it.next();
@@ -592,10 +593,14 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 						continue;
 					}
 
-					ReceiveWindow.setNakBackoffExpiration (skb, now + this.nak_rpt_ivl);
-					System.out.println ("nak_rpt_expiry in " + ((ReceiveWindow.getNakBackoffExpiration (skb) - now) / 1000) + " seconds.");
-					if (this.nextPoll > ReceiveWindow.getNakBackoffExpiration (skb))
-						this.nextPoll = ReceiveWindow.getNakBackoffExpiration (skb);
+					peer.setWaitNakConfirmState (skb);
+					nakList.add (skb.getSequenceNumber());
+					ReceiveWindow.incrementNakTransmitCount (skb);
+
+					ReceiveWindow.setNakRepeatExpiration (skb, now + this.nak_rpt_ivl);
+					System.out.println ("nak_rpt_expiry in " + ((ReceiveWindow.getNakRepeatExpiration (skb) - now) / 1000) + " seconds.");
+					if (this.nextPoll > ReceiveWindow.getNakRepeatExpiration (skb))
+						this.nextPoll = ReceiveWindow.getNakRepeatExpiration (skb);
 
 					if (nakList.size() == 63) {
 						if (!sendNakList (peer, nakList))
@@ -605,6 +610,7 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 				}
 				else
 				{	/* packet expires some time later */
+System.out.println ("SKB expiration now + " + (ReceiveWindow.getNakBackoffExpiration (skb) - now));
 					break;
 				}
 			}

@@ -117,8 +117,17 @@ public class ReceiveWindow {
 		return state.nakRepeatExpiration;
 	}
 
+	public static void setNakRepeatExpiration (SocketBuffer skb, long expiration) {
+		State state = (State)skb.getControlBuffer();
+		state.nakRepeatExpiration = expiration;
+	}
+
 	public long firstNakRepeatExpiration() {
 		return getNakRepeatExpiration (this.waitNakConfirmQueue.peek());
+	}
+
+	public void setWaitNakConfirmState (SocketBuffer skb) {
+		setPacketState (skb, PacketState.PKT_WAIT_NCF_STATE);
 	}
 
 	public Queue<SocketBuffer> getWaitDataQueue() {
@@ -132,6 +141,11 @@ public class ReceiveWindow {
 
 	public long firstNakRepairDataExpiration() {
 		return getNakRepairDataExpiration (this.waitDataQueue.peek());
+	}
+
+	public static void incrementNakTransmitCount (SocketBuffer skb) {
+		State state = (State)skb.getControlBuffer();
+		state.nakTransmitCount++;
 	}
 
 	private SocketBuffer peek (SequenceNumber sequence)
