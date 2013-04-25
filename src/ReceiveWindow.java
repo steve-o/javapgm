@@ -252,6 +252,11 @@ public class ReceiveWindow {
 		skb.setControlBuffer (new State ());
 		skb.setSequenceNumber (skb.getAsOriginalData().getSequenceNumber());
 
+		if (skb.getLength() != skb.getHeader().getTsduLength()) {
+			System.out.println ("SKB length does not match TSDU length.");
+			return Returns.RXW_MALFORMED;
+		}
+
 /* protocol sanity check: valid trail pointer wrt. sequence */
 		if (skb.getSequenceNumber().minus (skb.getAsOriginalData().getTrail()).longValue() >= ((UINT32_MAX/2)-1)) {
 			System.out.println ("SKB sequence " + skb.getSequenceNumber() + " outside window horizon by " + skb.getSequenceNumber().minus (skb.getAsOriginalData().getTrail()) + " wrt trail " + skb.getAsOriginalData().getTrail());
@@ -262,6 +267,24 @@ public class ReceiveWindow {
 		if (skb.getHeader().isParity()) {
 			System.out.println ("Unsupported parity packet");
 			return Returns.RXW_MALFORMED;
+		}
+
+		if (skb.isFragment()) {
+			if (skb.getFragmentOption().getApduLength() == skb.getLength()) {
+				System.out.println ("Fragmented message contains only one fragment.");
+			}
+			if (skb.getFragmentOption().getApduLength() < skb.getLength()) {
+				System.out.println ("SKB length greated than APDU length.");
+				return Returns.RXW_MALFORMED;
+			}
+			if (skb.getFragmentOption().getFirstSequenceNumber().gt (skb.getSequenceNumber())) {
+				System.out.println ("Fragment sequence number less than first message fragment.");
+				return Returns.RXW_MALFORMED;
+			}
+			if (skb.getFragmentOption().getApduLength() > MAX_APDU) {
+				System.out.println ("APDU greater than supported length.");
+				return Returns.RXW_MALFORMED;
+			}
 		}
 
 		if (!this.isDefined) {
@@ -563,7 +586,7 @@ System.out.println ("insert");
 		final int index = (int)(skb.getSequenceNumber().longValue() % getMaxLength());
 		this.pdata.add (index, skb);
 		setPacketState (skb, PacketState.PKT_HAVE_DATA_STATE);
-		this.size += skb.getHeader().getTsduLength();
+		this.size += skb.getLength();
 
 		return Returns.RXW_INSERTED;
 	}
@@ -624,7 +647,7 @@ System.out.println ("append");
 		}
 
 /* statistics */
-		this.size += skb.getHeader().getTsduLength();
+		this.size += skb.getLength();
 			
 		return Returns.RXW_APPENDED;
 	}
@@ -706,7 +729,7 @@ System.out.println ("removeTrail");
 		SocketBuffer skb = peek (this.trail);
 System.out.println ("trail " + this.trail + " = " + skb);
 		clearPacketState (skb);
-		this.size -= skb.getHeader().getTsduLength();
+		this.size -= skb.getLength();
 /* remove reference to skb */
 		skb = null;
 		final boolean data_loss = this.trail.equals (this.commitLead);
@@ -784,7 +807,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 		if (null == skb)
 			return false;
 
-		final long apdu_size = skb.isFragment()? skb.getFragmentOption().getFragmentLength() : skb.getHeader().getTsduLength();
+		final long apdu_size = skb.isFragment()? skb.getFragmentOption().getApduLength() : skb.getLength();
 		final SequenceNumber tg_sqn = transmissionGroupSequenceNumber (firstSequence);
 
 /* protocol sanity check: maximum length */
@@ -818,7 +841,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 			}
 
 /* protocol sanity check: matching apdu length */
-			if (skb.getFragmentOption().getFragmentLength() != apdu_size) {
+			if (skb.getFragmentOption().getApduLength() != apdu_size) {
 				markLost (firstSequence);
 				return false;
 			}
@@ -829,7 +852,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 				return false;
 			}
 
-			contiguous_size += skb.getHeader().getTsduLength();
+			contiguous_size += skb.getLength();
 			if (apdu_size == contiguous_size)
 				return true;
 			else if (apdu_size < contiguous_size) {
@@ -851,12 +874,12 @@ System.out.println ("trail " + this.trail + " = " + skb);
 		int contiguous_length = 0;
 		int count = 0;
 		SocketBuffer skb = peek (this.commitLead);
-		final long apdu_len = skb.isFragment() ? skb.getFragmentOption().getFragmentLength() : skb.getHeader().getTsduLength();
+		final long apdu_len = skb.isFragment() ? skb.getFragmentOption().getApduLength() : skb.getLength();
 
 		do {
 			setPacketState (skb, PacketState.PKT_COMMIT_DATA_STATE);
 			skbs.add (skb);
-			contiguous_length += skb.getHeader().getTsduLength();
+			contiguous_length += skb.getLength();
 			this.commitLead = this.commitLead.plus (1);
 			if (apdu_len == contiguous_length)
 				break;

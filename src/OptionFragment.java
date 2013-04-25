@@ -26,7 +26,8 @@ public class OptionFragment {
 		return this._skb.getUnsignedInt (this._offset + OPT_FRAG_OFF_OFFSET);
 	}
 
-	public final long getFragmentLength() {
+/* Rename FRAG_LEN to APDU length as this isn't the fragment length */
+	public final long getApduLength() {
 		return this._skb.getUnsignedInt (this._offset + OPT_FRAG_LEN_OFFSET);
 	}
 }
