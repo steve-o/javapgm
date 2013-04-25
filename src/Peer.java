@@ -31,8 +31,8 @@ public class Peer {
 		this.window = new ReceiveWindow (tsi, max_tpdu, rxw_sqns, rxw_secs, rxw_max_rte);
 	}
 
-	public ReceiveWindow.Returns add (SocketBuffer skb) {
-		return window.add (skb);
+	public ReceiveWindow.Returns add (SocketBuffer skb, long now, long nak_rb_expiry) {
+		return window.add (skb, now, nak_rb_expiry);
 	}
 
 	public int read (List<SocketBuffer> skbs) {
@@ -104,6 +104,11 @@ public class Peer {
 	public void clearDataLoss() {
 		this.lostCount = this.window.getCumulativeLosses() - this.lastCumulativeLosses;
 		this.lastCumulativeLosses = this.window.getCumulativeLosses();
+	}
+
+	public void markLost (SequenceNumber sequence)
+	{
+		this.window.markLost (sequence);
 	}
 
 	public boolean hasSpmrExpiration() {

@@ -23,6 +23,8 @@ public class testreceive
 	long lastCommit = 0;
 	long nextPoll = 0;
 	long peerExpiration = 300 * 1000;
+	long nak_rpt_ivl = 2 * 1000;
+	long nak_bo_ivl = 50;
 	boolean canReceiveData = true;
 	boolean isReset = false;
 	boolean isPendingRead = false;
@@ -284,6 +286,10 @@ if (Math.random() < 0.25) {
 		int msgCount = 0;
 		boolean flushNaks = false;
 
+		System.out.println ("onData");
+
+		final long nakBackoffExpiration = skb.getTimestamp() + calculateNakRandomBackoffInterval();
+
 		skb.setOriginalDataOffset (skb.getDataOffset());
 
 		final int opt_total_length = skb.getAsOriginalData().getOptionTotalLength();
@@ -294,7 +300,7 @@ if (Math.random() < 0.25) {
 		if (opt_total_length > 0)
 			Packet.parseOptionExtensions (skb, skb.getDataOffset());
 
-		final ReceiveWindow.Returns addStatus = source.add (skb);
+		final ReceiveWindow.Returns addStatus = source.add (skb, skb.getTimestamp(), nakBackoffExpiration);
 System.out.println ("ReceiveWindow.add returned " + addStatus);
 
 		switch (addStatus) {
@@ -311,6 +317,11 @@ System.out.println ("ReceiveWindow.add returned " + addStatus);
 			return false;
 		}
 
+		if (flushNaks) {
+/* flush out 1st time nak packets */
+			if (flushNaks && this.nextPoll > nakBackoffExpiration)
+				this.nextPoll = nakBackoffExpiration;
+		}
 		return true;
 	}
 
@@ -369,6 +380,7 @@ System.out.println ("flushPeersPending");
 	{
 		final long now = System.currentTimeMillis();
 		final boolean hasExpired = now >= this.nextPoll;
+System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 		return hasExpired;
 	}
 
@@ -519,6 +531,36 @@ System.out.println ("flushPeersPending");
 
 /* select NAK generation */
 
+			for (Iterator<SocketBuffer> it = nakBackoffQueue.iterator(); it.hasNext();)
+			{
+				SocketBuffer skb = it.next();
+
+				if (now >= ReceiveWindow.getNakBackoffExpiration (skb))
+				{
+					if (!isValidNla) {
+						droppedInvalid++;
+						peer.markLost (skb.getSequenceNumber());
+						setPendingPeer (peer);
+						continue;
+					}
+
+					ReceiveWindow.setNakBackoffExpiration (skb, now + this.nak_rpt_ivl);
+					System.out.println ("nak_rpt_expiry in " + ((ReceiveWindow.getNakBackoffExpiration (skb) - now) / 1000) + " seconds.");
+					if (this.nextPoll > ReceiveWindow.getNakBackoffExpiration (skb))
+						this.nextPoll = ReceiveWindow.getNakBackoffExpiration (skb);
+
+					if (nakList.size() == 63) {
+						if (!sendNakList (peer, nakList))
+							return false;
+						nakList.clear();
+					}
+				}
+				else
+				{	/* packet expires some time later */
+					break;
+				}
+			}
+
 			if (!nakList.isEmpty()) {
 				if (nakList.size() > 1 && !sendNakList (peer, nakList))
 					return false;
@@ -646,6 +688,22 @@ System.out.println ("flushPeersPending");
 	{
 		System.out.println ("sendNakList");
 		return true;
+	}
+
+/* The java Math library function Math.random() generates a double value in the
+ * range [0,1). Notice this range does not include the 1.
+ * Reference: http://stackoverflow.com/a/363732/175849
+ */
+	private long randomIntRange (long begin, long end)
+	{
+		return begin + (long)(Math.random() * ((end - begin) + 1));
+	}
+
+/* calculate NAK_RB_IVL as random time interval 1 - NAK_BO_IVL.
+ */
+	private long calculateNakRandomBackoffInterval()
+	{
+		return randomIntRange (1 /* us */, this.nak_bo_ivl);
 	}
 
 	public static void main (String[] args) throws IOException

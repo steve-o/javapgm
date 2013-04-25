@@ -77,9 +77,6 @@ public class ReceiveWindow {
 	protected long				transmissionGroupSize;
 	protected long				tgSqnShift;
 
-/* TODO: set from socket. */
-	protected int				nak_bo_ivl = 50 * 1000;
-
 	protected long				minFillTime;
 	protected long				maxFillTime;
 	protected long				minNakTransmitCount;
@@ -96,30 +93,44 @@ public class ReceiveWindow {
 		return this.nakBackoffQueue;
 	}
 
-	public long firstNakBackoffExpiration() {
-		final SocketBuffer skb = this.nakBackoffQueue.peek();
+	public static long getNakBackoffExpiration (SocketBuffer skb) {
 		final State state = (State)skb.getControlBuffer();
 		return state.nakBackoffExpiration;
+	}
+
+	public static void setNakBackoffExpiration (SocketBuffer skb, long expiration) {
+		State state = (State)skb.getControlBuffer();
+		state.nakBackoffExpiration = expiration;
+	}
+
+	public long firstNakBackoffExpiration() {
+		return getNakBackoffExpiration (this.nakBackoffQueue.peek());
 	}
 
 	public Queue<SocketBuffer> getWaitNakConfirmQueue() {
 		return this.waitNakConfirmQueue;
 	}
 
-	public long firstNakRepeatExpiration() {
-		final SocketBuffer skb = this.waitNakConfirmQueue.peek();
+	public static long getNakRepeatExpiration (SocketBuffer skb) {
 		final State state = (State)skb.getControlBuffer();
 		return state.nakRepeatExpiration;
+	}
+
+	public long firstNakRepeatExpiration() {
+		return getNakRepeatExpiration (this.waitNakConfirmQueue.peek());
 	}
 
 	public Queue<SocketBuffer> getWaitDataQueue() {
 		return this.waitDataQueue;
 	}
 
-	public long firstNakRepairDataExpiration() {
-		final SocketBuffer skb = this.waitDataQueue.peek();
+	public static long getNakRepairDataExpiration (SocketBuffer skb) {
 		final State state = (State)skb.getControlBuffer();
 		return state.nakRepairDataExpiration;
+	}
+
+	public long firstNakRepairDataExpiration() {
+		return getNakRepairDataExpiration (this.waitDataQueue.peek());
 	}
 
 	private SocketBuffer peek (SequenceNumber sequence)
@@ -230,7 +241,7 @@ public class ReceiveWindow {
  * PGM_RXW_MALFORMED - corrupted or invalid packet.
  * PGM_RXW_BOUNDS - packet out of window.
  */
-	public Returns add (SocketBuffer skb)
+	public Returns add (SocketBuffer skb, long now, long nak_rb_expiry)
 	{
 		Returns status;
 
@@ -277,12 +288,12 @@ System.out.println ("sequence: " + skb.getSequenceNumber() + ", lead: " + this.l
 
 		if (skb.getSequenceNumber().equals (this.lead.plus (1))) {
 			this.hasEvent = true;
-			return append (skb);
+			return append (skb, now);
 		}
 
-		status = addPlaceholderRange (skb.getSequenceNumber());
+		status = addPlaceholderRange (skb.getSequenceNumber(), now, nak_rb_expiry);
 		if (Returns.RXW_APPENDED == status) {
-			status = append (skb);
+			status = append (skb, now);
 			if (Returns.RXW_APPENDED == status)
 				status = Returns.RXW_MISSING;
 		}
@@ -358,17 +369,17 @@ System.out.println ("updating trail");
 
 /* add one placeholder to leading edge due to detected lost packet.
  */
-	private void addPlaceholder()
+	private void addPlaceholder (long now, long nak_rb_expiry)
 	{
 /* advance lead */
 		this.lead = this.lead.plus (1);
 
 		SocketBuffer skb = new SocketBuffer (this.max_tpdu);
 		skb.setControlBuffer (new State ());
-		skb.setTimestamp (System.currentTimeMillis());
+		skb.setTimestamp (now);
 		skb.setSequenceNumber (this.lead);
 		State state = (State)skb.getControlBuffer();
-		state.nakBackoffExpiration = calculateNakRandomBackoffInterval();
+		state.nakBackoffExpiration = nak_rb_expiry;
 
 		if (!isFirstOfTransmissionGroup (this.lead)) {
 			SocketBuffer first = peek (transmissionGroupSequenceNumber (this.lead));
@@ -389,12 +400,12 @@ System.out.println ("updating trail");
  * RXW_BOUNDS: Incoming window is bound by commit window.
  * RXW_APPENDED: Place holders added.
  */
-	private Returns addPlaceholderRange (SequenceNumber sequence)
+	private Returns addPlaceholderRange (SequenceNumber sequence, long now, long nak_rb_expiry)
 	{
 /* check bounds of commit window */
 		final int commit_length = sequence.plus (1).minus (this.trail).intValue();
 		if (!isCommitEmpty() && (commit_length >= getMaxLength())) {
-			updateLead (sequence);
+			updateLead (sequence, now, nak_rb_expiry);
 			return Returns.RXW_BOUNDS;
 		}
 		if (isFull()) {
@@ -405,7 +416,7 @@ System.out.println ("updating trail");
  * TODO: can be rather inefficient on packet loss looping through dropped sequence numbers
  */
 		while (!this.lead.plus (1).equals (sequence)) {
-			addPlaceholder();
+			addPlaceholder (now, nak_rb_expiry);
 			if (isFull()) {
 				System.out.println ("Receive window full on placeholder sequence.");
 				removeTrail();
@@ -416,7 +427,7 @@ System.out.println ("updating trail");
 
 /* Returns number of place holders added.
  */
-	private int updateLead (SequenceNumber txw_lead)
+	private int updateLead (SequenceNumber txw_lead, long now, long nak_rb_expiry)
 	{
 		SequenceNumber lead = null;
 		int lost = 0;
@@ -444,7 +455,7 @@ System.out.println ("updating trail");
 				System.out.println ("Receive window full on window lead advancement.");
 				removeTrail();
 			}
-			addPlaceholder();
+			addPlaceholder (now, nak_rb_expiry);
 			lost++;
 		}
 
@@ -567,7 +578,7 @@ System.out.println ("insert");
  * PGM_RXW_MALFORMED - corrupted or invalid packet.
  * PGM_RXW_BOUNDS - packet out of window.
  */
-	private Returns append (SocketBuffer skb)
+	private Returns append (SocketBuffer skb, long now)
 	{
 System.out.println ("append");
 		if (isInvalidVarPktLen (skb) || isInvalidPayloadOption (skb)) {
@@ -591,7 +602,7 @@ System.out.println ("append");
 /* APDU fragments are already declared lost */
 		if (skb.isFragment() && isApduLost (skb)) {
 			SocketBuffer lost_skb = new SocketBuffer (this.max_tpdu);
-			lost_skb.setTimestamp (System.currentTimeMillis());
+			lost_skb.setTimestamp (now);
 			lost_skb.setSequenceNumber (skb.getSequenceNumber());
 
 /* add lost-placeholder skb to window */
@@ -956,7 +967,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 
 /* mark an existing sequence lost due to failed recovery.
  */
-	private void markLost (SequenceNumber sequence)
+	public void markLost (SequenceNumber sequence)
 	{
 		System.out.println ("markLost ( " +
 					"\"sequence\": " + sequence + "" +
@@ -978,22 +989,6 @@ System.out.println ("trail " + this.trail + " = " + skb);
 	private int recoveryAppend()
 	{
 		return -1;
-	}
-
-/* The java Math library function Math.random() generates a double value in the
- * range [0,1). Notice this range does not include the 1.
- * Reference: http://stackoverflow.com/a/363732/175849
- */
-	private int randomIntRange (int begin, int end)
-	{
-		return begin + (int)(Math.random() * ((end - begin) + 1));
-	}
-
-/* calculate NAK_RB_IVL as random time interval 1 - NAK_BO_IVL.
- */
-	private int calculateNakRandomBackoffInterval()
-	{
-		return this.randomIntRange (1 /* us */, this.nak_bo_ivl);
 	}
 
 	public boolean hasEvent()
