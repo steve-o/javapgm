@@ -11,6 +11,7 @@ public class Peer {
 	private InetAddress groupPath = null;
 	private InetAddress nla = null, local_nla = null;
 	private long lastPacketTimestamp = 0;
+	private SequenceNumber spm_sqn = null;
 	private ReceiveWindow window;
 	private boolean hasPendingLinkData = false;
 	private long lastCommit = 0;
@@ -28,11 +29,16 @@ public class Peer {
 		)
 	{
 		this.tsi = tsi;
+		this.spm_sqn = SequenceNumber.valueOf (0);
 		this.window = new ReceiveWindow (tsi, max_tpdu, rxw_sqns, rxw_secs, rxw_max_rte);
 	}
 
 	public ReceiveWindow.Returns add (SocketBuffer skb, long now, long nak_rb_expiry) {
 		return window.add (skb, now, nak_rb_expiry);
+	}
+
+	public int update (SequenceNumber txw_lead, SequenceNumber txw_trail, long now, long nak_rb_expiry) {
+		return window.update (txw_lead, txw_trail, now, nak_rb_expiry);
 	}
 
 	public int read (List<SocketBuffer> skbs) {
@@ -47,12 +53,24 @@ public class Peer {
 		this.groupPath = groupPath;
 	}
 
+	public void setNetworkLayerAddress (InetAddress nla) {
+		this.nla = nla;
+	}
+
 	public boolean hasValidNla() {
 		return (null != this.nla);
 	}
 
 	public void setLastPacketTimestamp (long lastPacketTimestamp) {
 		this.lastPacketTimestamp = lastPacketTimestamp;
+	}
+
+	public void setSpmSequenceNumber (SequenceNumber spm_sqn) {
+		this.spm_sqn = spm_sqn;
+	}
+
+	public SequenceNumber getSpmSequenceNumber() {
+		return this.spm_sqn;
 	}
 
 /* edge trigerred has receiver pending events

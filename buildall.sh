@@ -23,6 +23,6 @@ javac \
 	src/ReceiveWindow.java \
 	src/SequenceNumber.java \
 	src/SocketBuffer.java \
-	src/SourcePathMessagePacket.java \
+	src/SourcePathMessage.java \
 	src/TransportSessionId.java \
 	src/UnsignedInts.java

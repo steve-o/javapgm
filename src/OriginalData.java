@@ -65,7 +65,7 @@ public class OriginalData {
 		return  "{ " +
 			 "\"sourcePort\": " + header.getSourcePort() +
 		       ", \"destinationPort\": " + header.getDestinationPort() +
-		       ", \"type\": \"" + header.getTypeName() + "\"" +
+		       ", \"type\": \"" + header.getTypeAsString() + "\"" +
 		       ", \"options\": " + header.getOptions() +
 		       ", \"checksum\": 0x" + Integer.toHexString (header.getChecksum()) +
 		       ", \"gsi\": \"" + header.getGlobalSourceId() + "\"" +

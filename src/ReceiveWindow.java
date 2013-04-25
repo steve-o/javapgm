@@ -337,6 +337,19 @@ System.out.println ("defining window");
 		this.isConstrained = this.isDefined = true;
 	}
 
+	public int update (SequenceNumber txw_lead, SequenceNumber txw_trail, long now, long nak_rb_expiry)
+	{
+		System.out.println ("update");
+
+		if (!this.isDefined) {
+			define (txw_trail);
+			return 0;
+		}
+
+		updateTrail (txw_trail);
+		return updateLead (txw_lead, now, nak_rb_expiry);
+	}
+
 	private void updateTrail (SequenceNumber txw_trail)
 	{
 System.out.println ("updating trail");

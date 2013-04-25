@@ -30,7 +30,7 @@ public class Header {
 		return this._skb.getUnsignedByte (this._offset + Packet.PGM_TYPE_OFFSET);
 	}
 
-	public final String getTypeName() {
+	public final String getTypeAsString() {
 		final int type = getType();
 		switch (type) {
 		case Packet.PGM_SPM:	return "PGM_SPM";
@@ -42,7 +42,7 @@ public class Header {
 		case Packet.PGM_NNAK:	return "PGM_NNAK";
 		case Packet.PGM_NCF:	return "PGM_NCF";
 		case Packet.PGM_SPMR:	return "PGM_SPMR";
-		default:		return "INVALID";
+		default:		return "(unknown)";
 		}
 	}
 

@@ -343,6 +343,49 @@ System.out.println ("ReceiveWindow.add returned " + addStatus);
 		SocketBuffer skb
 		)
 	{
+		System.out.println ("onSourcePathMessage");
+
+		SourcePathMessage spm = new SourcePathMessage (skb, skb.getDataOffset());
+
+/* check for advancing sequence number, or first SPM */
+/* BUG: cannot join old networks */
+		if (spm.getSpmSequenceNumber().gte (source.getSpmSequenceNumber()))
+		{
+/* copy NLA for replies */
+			source.setNetworkLayerAddress (spm.getNetworkLayerAddress());
+
+/* save sequence number */
+			source.setSpmSequenceNumber (spm.getSpmSequenceNumber());
+
+/* update receive window */
+			final long nak_rb_expiry = skb.getTimestamp() + calculateNakRandomBackoffInterval();
+			final int naks = source.update (spm.getSpmLead(),
+							spm.getSpmTrail(),
+							skb.getTimestamp(),
+							nak_rb_expiry);
+			if (naks > 0) {
+				if (this.nextPoll > nak_rb_expiry)
+					this.nextPoll = nak_rb_expiry;
+			}
+
+/* mark receiver window for flushing on next recv() */
+			if (source.hasDataLoss() &&
+			    !source.hasPendingLinkData())
+			{
+				this.isReset = true;
+				source.clearDataLoss();
+				setPendingPeer (source);
+			}
+		}
+		else
+		{	/* does not advance SPM sequence number */
+			System.out.println ("Discarded duplicate SPM.");
+			return false;
+		}
+
+/* either way bump expiration timer */
+		source.setExpiration (skb.getTimestamp() + this.peerExpiration);
+		source.clearSpmrExpiration();
 		return true;
 	}
 
