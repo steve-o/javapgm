@@ -27,7 +27,8 @@ public class testreceive
 	long nak_bo_ivl = 50;
 	boolean canReceiveData = true;
 	boolean isReset = false;
-	boolean isPendingRead = false;
+	boolean shouldAbortOnReset = false;
+	boolean hasPendingRead = false;
 	DatagramChannel dc = null;
 	ByteBuffer buffer = null;
 	SocketBuffer rx_buffer = null;
@@ -94,7 +95,7 @@ public class testreceive
 					System.out.println ("would block.");
 					break;
 				default:
-					System.out.println ("error");
+					System.out.println ("unhandled return state: " + status);
 					break;
 				}
 			}
@@ -114,6 +115,8 @@ public class testreceive
 		IoStatus status = IoStatus.IO_STATUS_WOULD_BLOCK;
 
 		if (this.isReset) {
+			if (!this.shouldAbortOnReset)
+				this.isReset = !this.isReset;
 			return IoStatus.IO_STATUS_RESET;
 		}
 
@@ -169,6 +172,8 @@ if (Math.random() < 0.25) {
 
 		if (skbs.isEmpty()) {
 			if (this.isReset) {
+				if (!this.shouldAbortOnReset)
+					this.isReset = !this.isReset;
 				return IoStatus.IO_STATUS_RESET;
 			}
 			if (IoStatus.IO_STATUS_WOULD_BLOCK == status &&
@@ -465,10 +470,10 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 		}
 
 /* check for waiting contiguous packets */
-		if (!this.peers_pending.isEmpty() && !this.isPendingRead)
+		if (!this.peers_pending.isEmpty() && !this.hasPendingRead)
 		{
 			System.out.println ("Signal receiver thread.");
-			this.isPendingRead = true;
+			this.hasPendingRead = true;
 		}
 
 		return true;
