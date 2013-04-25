@@ -3,6 +3,7 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 public class ReceiveWindow {
 
@@ -228,9 +229,10 @@ public class ReceiveWindow {
 /* RxPacket array */
 		this.alloc = alloc_sqns;
 
-		this.nakBackoffQueue = new LinkedList<SocketBuffer> ();
-		this.waitNakConfirmQueue = new LinkedList<SocketBuffer> ();
-		this.waitDataQueue = new LinkedList<SocketBuffer> ();
+/* Concurrent to permit modification during iteration without a listIterator. */
+		this.nakBackoffQueue = new ConcurrentLinkedQueue<SocketBuffer> ();
+		this.waitNakConfirmQueue = new ConcurrentLinkedQueue<SocketBuffer> ();
+		this.waitDataQueue = new ConcurrentLinkedQueue<SocketBuffer> ();
 	}
 
 /* Returns:
