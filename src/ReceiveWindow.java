@@ -88,7 +88,7 @@ public class ReceiveWindow {
 
 	protected int				size;
 	protected int				alloc;
-	protected Vector<SocketBuffer>		pdata = null;
+	protected SocketBuffer[]		pdata = null;
 
 	public Queue<SocketBuffer> getNakBackoffQueue() {
 		return this.nakBackoffQueue;
@@ -159,7 +159,7 @@ public class ReceiveWindow {
  * error: possible loss of precision
  */
 			final int index = (int)(sequence.longValue() % getMaxLength());
-			SocketBuffer skb = this.pdata.get (index);
+			SocketBuffer skb = this.pdata[index];
 			return skb;
 		}
 
@@ -220,11 +220,12 @@ public class ReceiveWindow {
 		)
 	{
 		final int alloc_sqns = sqns > 0 ? sqns : (int)((secs * max_rte) / tpdu_size);
-		this.pdata = new Vector<SocketBuffer> (alloc_sqns);
-		this.pdata.setSize (alloc_sqns);
+		this.pdata = new SocketBuffer[alloc_sqns];
 
 		this.tsi = tsi;
 		this.max_tpdu = tpdu_size;
+
+System.out.println ("alloc_sqns:" + alloc_sqns);
 
 /* empty state:
  *
@@ -319,7 +320,7 @@ public class ReceiveWindow {
 			}
 		}
 
-System.out.println ("sequence: " + skb.getSequenceNumber() + ", lead: " + this.lead);
+System.out.println ("SKB:" + skb.getSequenceNumber() + " trail:" + this.trail + " commit:" + this.commitLead + " lead:" + this.lead + " (RXW_TRAIL:" + this.rxw_trail + ")");
 		if (skb.getSequenceNumber().lte (this.lead)) {
 			this.hasEvent = true;
 			return insert (skb);
@@ -403,6 +404,7 @@ System.out.println ("updating trail");
 		     this.rxw_trail.gt (sequence) && this.lead.gte (sequence);
 		     sequence = sequence.plus (1))
 		{
+System.out.println ("Purge #" + sequence);
 			SocketBuffer skb = peek (sequence);
 			State state = (State)skb.getControlBuffer();
 			switch (state.pktState) {
@@ -443,9 +445,10 @@ System.out.println ("updating trail");
 
 /* add skb to window */
 		final int index = (int)(this.lead.longValue() % getMaxLength());
-		this.pdata.add (index, skb);
+		this.pdata[index] = skb;
 
 		setPacketState (skb, PacketState.PKT_BACK_OFF_STATE);
+System.out.println ("Placeholder #" + this.lead + " @" + index);
 	}
 
 /* Returns:
@@ -583,7 +586,7 @@ System.out.println ("insert");
 			return Returns.RXW_MALFORMED;
 		} else {
 			final int index = (int)(skb.getSequenceNumber().longValue() % getMaxLength());
-			skb = this.pdata.get (index);
+			skb = this.pdata[index];
 			state = (State)skb.getControlBuffer();
 			if (state.pktState == PacketState.PKT_HAVE_DATA_STATE)
 				return Returns.RXW_DUPLICATE;
@@ -613,7 +616,7 @@ System.out.println ("insert");
 
 /* replace placeholder skb with incoming skb */
 		final int index = (int)(skb.getSequenceNumber().longValue() % getMaxLength());
-		this.pdata.add (index, skb);
+		this.pdata[index] = skb;
 		setPacketState (skb, PacketState.PKT_HAVE_DATA_STATE);
 		this.size += skb.getLength();
 
@@ -654,12 +657,13 @@ System.out.println ("append");
 /* APDU fragments are already declared lost */
 		if (skb.isFragment() && isApduLost (skb)) {
 			SocketBuffer lost_skb = new SocketBuffer (this.max_tpdu);
+			lost_skb.setControlBuffer (new State ());
 			lost_skb.setTimestamp (now);
 			lost_skb.setSequenceNumber (skb.getSequenceNumber());
 
 /* add lost-placeholder skb to window */
 			final int index = (int)(lost_skb.getSequenceNumber().longValue() % getMaxLength());
-			this.pdata.add (index, skb);
+			this.pdata[index] = skb;
 
 			setPacketState (skb, PacketState.PKT_LOST_DATA_STATE);
 			System.out.println ("APDU already declared lost, ignoring TPDU.");
@@ -671,7 +675,7 @@ System.out.println ("append");
 			return Returns.RXW_MALFORMED;
 		} else {
 			final int index = (int)(skb.getAsOriginalData().getSequenceNumber().longValue() % getMaxLength());
-			this.pdata.add (index, skb);
+			this.pdata[index] = skb;
 			setPacketState (skb, PacketState.PKT_HAVE_DATA_STATE);
 		}
 
@@ -715,6 +719,7 @@ System.out.println ("read");
 		int bytes_read = -1;
 		if (isIncomingEmpty())
 			return bytes_read;
+System.out.println ("read #" + this.commitLead);
 		SocketBuffer skb = peek (this.commitLead);
 		State state = (State)skb.getControlBuffer();
 		switch (state.pktState) {
