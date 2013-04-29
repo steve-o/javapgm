@@ -149,6 +149,10 @@ public class Peer {
 		return this.window.firstNakBackoffExpiration();
 	}
 
+	public void setBackoffState (SocketBuffer skb) {
+		this.window.setBackoffState (skb);
+	}
+
 	public Queue<SocketBuffer> getWaitNakConfirmQueue() {
 		return this.window.getWaitNakConfirmQueue();
 	}
@@ -165,8 +169,8 @@ public class Peer {
 		return this.window.getWaitDataQueue();
 	}
 
-	public long firstNakRepairDataExpiration() {
-		return this.window.firstNakRepairDataExpiration();
+	public long firstRepairDataExpiration() {
+		return this.window.firstRepairDataExpiration();
 	}
 
 	public long getExpiration() {

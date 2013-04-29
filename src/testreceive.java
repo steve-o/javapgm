@@ -25,6 +25,8 @@ public class testreceive
 	long peerExpiration = 300 * 1000;
 	long nak_rpt_ivl = 2 * 1000;
 	long nak_bo_ivl = 50;
+	long nak_ncf_retries = 50;
+	long nak_data_retries = 50;
 	boolean canReceiveData = true;
 	boolean isReset = false;
 	boolean shouldAbortOnReset = false;
@@ -485,7 +487,7 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 			}
 
 			if (!peer.getWaitDataQueue().isEmpty() &&
-			    now >= peer.firstNakRepairDataExpiration())
+			    now >= peer.firstRepairDataExpiration())
 			{
 				nakRepairDataState (peer, now);
 			}
@@ -535,25 +537,29 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 			if (peer.hasSpmrExpiration() &&
 			    expiration >= peer.getSpmrExpiration())
 			{
+System.out.println ("Next expiration: SPMR");
 				expiration = peer.getSpmrExpiration();
 			}
 
 			if (!peer.getNakBackoffQueue().isEmpty() &&
 			    expiration >= peer.firstNakBackoffExpiration())
 			{
+System.out.println ("Next expiration: NAK backoff");
 				expiration = peer.firstNakBackoffExpiration();
 			}
 
 			if (!peer.getWaitNakConfirmQueue().isEmpty() &&
 			    expiration >= peer.firstNakRepeatExpiration())
 			{
+System.out.println ("Next expiration: NAK repeat");
 				expiration = peer.firstNakRepeatExpiration();
 			}
 
 			if (!peer.getWaitDataQueue().isEmpty() &&
-			    expiration >= peer.firstNakRepairDataExpiration())
+			    expiration >= peer.firstRepairDataExpiration())
 			{
-				expiration = peer.firstNakRepairDataExpiration();
+System.out.println ("Next expiration: RDATA");
+				expiration = peer.firstRepairDataExpiration();
 			}
 		}
 
@@ -656,6 +662,44 @@ System.out.println ("SKB expiration now + " + (ReceiveWindow.getNakBackoffExpira
 
 		final boolean isValidNla = peer.hasValidNla();
 
+System.out.println ("waitNcfQueue contains " + waitNakConfirmQueue.size() + " SKBs.");
+		for (Iterator<SocketBuffer> it = waitNakConfirmQueue.iterator(); it.hasNext();)
+		{
+			SocketBuffer skb = it.next();
+
+/* check this packet for state expiration */
+			if (now >= ReceiveWindow.getNakRepeatExpiration (skb))
+			{
+				if (!isValidNla) {
+					droppedInvalid++;
+					peer.markLost (skb.getSequenceNumber());
+/* mark receiver window for flushing on next recv() */
+					setPendingPeer (peer);
+					continue;
+				}
+
+				ReceiveWindow.incrementNcfRetryCount (skb);
+				if (ReceiveWindow.getNcfRetryCount (skb) >= this.nak_ncf_retries)
+				{
+					dropped++;
+					cancel (peer, skb, now);
+				}
+				else
+				{
+/* retry */
+					ReceiveWindow.setNakBackoffExpiration (skb, now + calculateNakRandomBackoffInterval());
+					peer.setBackoffState (skb);
+					System.out.println ("NCF retry #" + skb.getSequenceNumber() + " attempt " + ReceiveWindow.getNcfRetryCount (skb) + "/" + this.nak_ncf_retries + ".");
+				}
+			}
+			else
+			{
+/* packet expires some time later */
+				final long seconds = (ReceiveWindow.getNakRepeatExpiration (skb) - now) / 1000;
+				System.out.println ("NCF retry #" + skb.getSequenceNumber() + " is delayed " + seconds + " seconds.");
+			}
+		}
+
 		if (droppedInvalid > 0)
 			System.out.println ("Dropped " + droppedInvalid + " message due to invalid NLA.");
 
@@ -697,6 +741,43 @@ System.out.println ("SKB expiration now + " + (ReceiveWindow.getNakBackoffExpira
 
 		final boolean isValidNla = peer.hasValidNla();
 
+System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.");
+		for (Iterator<SocketBuffer> it = waitDataQueue.iterator(); it.hasNext();)
+		{
+			SocketBuffer skb = it.next();
+
+/* check this packet for state expiration */
+			if (now >= ReceiveWindow.getRepairDataExpiration (skb))
+			{
+				if (!isValidNla) {
+					droppedInvalid++;
+					peer.markLost (skb.getSequenceNumber());
+/* mark receiver window for flushing on next recv() */
+					setPendingPeer (peer);
+					continue;
+				}
+
+				ReceiveWindow.incrementDataRetryCount (skb);
+				if (ReceiveWindow.getDataRetryCount (skb) >= this.nak_data_retries)
+				{
+					dropped++;
+					cancel (peer, skb, now);
+				}
+				else
+				{
+/* retry */
+					ReceiveWindow.setNakBackoffExpiration (skb, now + calculateNakRandomBackoffInterval());
+					peer.setBackoffState (skb);
+					System.out.println ("Data retry #" + skb.getSequenceNumber() + " attempt " + ReceiveWindow.getDataRetryCount (skb) + "/" + this.nak_data_retries + ".");
+				}
+			}
+			else
+			{
+/* packet expires some time later */
+				break;
+			}
+		}
+
 		if (droppedInvalid > 0)
 			System.out.println ("Dropped " + droppedInvalid + " message due to invalid NLA.");
 
@@ -712,7 +793,7 @@ System.out.println ("SKB expiration now + " + (ReceiveWindow.getNakBackoffExpira
 		}
 
 		if (!waitDataQueue.isEmpty()) {
-			final long seconds = (peer.firstNakRepairDataExpiration() - now) / 1000;
+			final long seconds = (peer.firstRepairDataExpiration() - now) / 1000;
 			System.out.println ("Next expiration set in " + seconds + " seconds.");
 		} else {
 			System.out.println ("Wait data queue empty.");
@@ -742,6 +823,16 @@ System.out.println ("SKB expiration now + " + (ReceiveWindow.getNakBackoffExpira
 	{
 		System.out.println ("sendNakList");
 		return true;
+	}
+
+	private void cancel (Peer peer, SocketBuffer skb, long now)
+	{
+		System.out.println ("Lost data #" + skb.getSequenceNumber() + " due to cancellation.");
+
+		peer.markLost (skb.getSequenceNumber());
+
+/* mark receiver window for flushing on next recv() */
+		setPendingPeer (peer);
 	}
 
 /* The java Math library function Math.random() generates a double value in the

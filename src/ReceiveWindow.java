@@ -40,10 +40,10 @@ public class ReceiveWindow {
 	private class State implements ControlBuffer {
 		long				nakBackoffExpiration;
 		long				nakRepeatExpiration;
-		long				nakRepairDataExpiration;
+		long				repairDataExpiration;
 		PacketState			pktState;
 		int				nakTransmitCount;
-		int				nakConfirmRetryCount;
+		int				ncfRetryCount;
 		int				dataRetryCount;
 		boolean				isContiguous;
 
@@ -108,6 +108,10 @@ public class ReceiveWindow {
 		return getNakBackoffExpiration (this.nakBackoffQueue.peek());
 	}
 
+	public void setBackoffState (SocketBuffer skb) {
+		setPacketState (skb, PacketState.PKT_BACK_OFF_STATE);
+	}
+
 	public Queue<SocketBuffer> getWaitNakConfirmQueue() {
 		return this.waitNakConfirmQueue;
 	}
@@ -134,18 +138,38 @@ public class ReceiveWindow {
 		return this.waitDataQueue;
 	}
 
-	public static long getNakRepairDataExpiration (SocketBuffer skb) {
+	public static long getRepairDataExpiration (SocketBuffer skb) {
 		final State state = (State)skb.getControlBuffer();
-		return state.nakRepairDataExpiration;
+		return state.repairDataExpiration;
 	}
 
-	public long firstNakRepairDataExpiration() {
-		return getNakRepairDataExpiration (this.waitDataQueue.peek());
+	public long firstRepairDataExpiration() {
+		return getRepairDataExpiration (this.waitDataQueue.peek());
 	}
 
 	public static void incrementNakTransmitCount (SocketBuffer skb) {
 		State state = (State)skb.getControlBuffer();
 		state.nakTransmitCount++;
+	}
+
+	public static void incrementNcfRetryCount (SocketBuffer skb) {
+		State state = (State)skb.getControlBuffer();
+		state.ncfRetryCount++;
+	}
+
+	public static long getNcfRetryCount (SocketBuffer skb) {
+		State state = (State)skb.getControlBuffer();
+		return state.ncfRetryCount;
+	}
+
+	public static void incrementDataRetryCount (SocketBuffer skb) {
+		State state = (State)skb.getControlBuffer();
+		state.dataRetryCount++;
+	}
+
+	public static long getDataRetryCount (SocketBuffer skb) {
+		State state = (State)skb.getControlBuffer();
+		return state.dataRetryCount;
 	}
 
 	private SocketBuffer peek (SequenceNumber sequence)
