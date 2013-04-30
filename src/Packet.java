@@ -85,7 +85,7 @@ public class Packet {
 		return true;
 	}
 
-	private static int doChecksum (byte[] buf) {
+	public static int doChecksum (byte[] buf) {
 		int sum = 0;
 		int i = 0, len = buf.length;
 		while (len > 1) {

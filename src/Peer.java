@@ -53,6 +53,10 @@ public class Peer {
 		this.groupPath = groupPath;
 	}
 
+	public InetAddress getNetworkLayerAddress() {
+		return this.nla;
+	}
+
 	public void setNetworkLayerAddress (InetAddress nla) {
 		this.nla = nla;
 	}

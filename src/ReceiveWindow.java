@@ -291,7 +291,7 @@ System.out.println ("alloc_sqns:" + alloc_sqns);
 					" )");
 
 		skb.setControlBuffer (new State ());
-		skb.setSequenceNumber (skb.getAsOriginalData().getSequenceNumber());
+		skb.setSequenceNumber (skb.getAsOriginalData().getDataSequenceNumber());
 
 		if (skb.getLength() != skb.getHeader().getTsduLength()) {
 			System.out.println ("SKB length does not match TSDU length.");
@@ -299,8 +299,8 @@ System.out.println ("alloc_sqns:" + alloc_sqns);
 		}
 
 /* protocol sanity check: valid trail pointer wrt. sequence */
-		if (skb.getSequenceNumber().minus (skb.getAsOriginalData().getTrail()).longValue() >= ((UINT32_MAX/2)-1)) {
-			System.out.println ("SKB sequence " + skb.getSequenceNumber() + " outside window horizon by " + skb.getSequenceNumber().minus (skb.getAsOriginalData().getTrail()) + " wrt trail " + skb.getAsOriginalData().getTrail());
+		if (skb.getSequenceNumber().minus (skb.getAsOriginalData().getDataTrail()).longValue() >= ((UINT32_MAX/2)-1)) {
+			System.out.println ("SKB sequence " + skb.getSequenceNumber() + " outside window horizon by " + skb.getSequenceNumber().minus (skb.getAsOriginalData().getDataTrail()) + " wrt trail " + skb.getAsOriginalData().getDataTrail());
 			return Returns.RXW_BOUNDS;
 		}
 
@@ -331,7 +331,7 @@ System.out.println ("alloc_sqns:" + alloc_sqns);
 		if (!this.isDefined) {
 			define (skb.getSequenceNumber().minus (1));
 		} else {
-			updateTrail (skb.getAsOriginalData().getTrail());
+			updateTrail (skb.getAsOriginalData().getDataTrail());
 		}
 
 		if (skb.getSequenceNumber().lt (this.commitLead)) {
@@ -698,7 +698,7 @@ System.out.println ("append");
 		if (skb.getHeader().isParity()) {
 			return Returns.RXW_MALFORMED;
 		} else {
-			final int index = (int)(skb.getAsOriginalData().getSequenceNumber().longValue() % getMaxLength());
+			final int index = (int)(skb.getSequenceNumber().longValue() % getMaxLength());
 			this.pdata[index] = skb;
 			setPacketState (skb, PacketState.PKT_HAVE_DATA_STATE);
 		}

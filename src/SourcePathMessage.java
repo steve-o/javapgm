@@ -46,13 +46,13 @@ public class SourcePathMessage {
 		return SequenceNumber.fromIntBits (this._skb.getSignedInt (this._offset + SPM_LEAD_OFFSET));
 	}
 
-	public final int getNetworkLayerAddressFamily() {
+	public final int getSpmNlaAfi() {
 		return this._skb.getUnsignedShort (this._offset + SPM_NLA_AFI_OFFSET);
 	}
 
-	public final InetAddress getNetworkLayerAddress() {
+	public final InetAddress getSpmNla() {
 		try {
-			switch (this.getNetworkLayerAddressFamily()) {
+			switch (this.getSpmNlaAfi()) {
 			case Packet.AFI_IP:
 				byte[] in_addr = new byte[SIZEOF_INADDR];
 				System.arraycopy (this._skb.getRawBytes(), this._offset + SPM_NLA_OFFSET,
@@ -86,8 +86,8 @@ public class SourcePathMessage {
 		       ", \"spmSqn\": " + this.getSpmSequenceNumber() +
 		       ", \"spmTrail\": " + this.getSpmTrail() +
 		       ", \"spmLead\": " + this.getSpmLead() +
-		       ", \"spmNlaAfi\": " + this.getNetworkLayerAddressFamily() +
-		       ", \"spmNla\": \"" + this.getNetworkLayerAddress() + "\"" +
+		       ", \"spmNlaAfi\": " + this.getSpmNlaAfi() +
+		       ", \"spmNla\": \"" + this.getSpmNla() + "\"" +
 		        "}\n";
 	}
 }

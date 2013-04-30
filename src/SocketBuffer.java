@@ -124,6 +124,10 @@ public class SocketBuffer {
                 return this._buf[offset] & 0xff;
         }
 
+	public void setUnsignedByte (int offset, int value) {
+                this._buf[offset] = (byte)(value & 0xff);
+	}
+
         public final short getSignedShort (int offset) {
                 return (short)((getSignedByte (offset + 0) << 8) +         /* keep sign-bit */
                         (getUnsignedByte (offset + 1) << 0));

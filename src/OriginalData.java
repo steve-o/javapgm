@@ -23,19 +23,19 @@ public class OriginalData {
 		this._offset = offset;
 	}
 
-	public final SequenceNumber getSequenceNumber() {
+	public final SequenceNumber getDataSequenceNumber() {
 		return SequenceNumber.fromIntBits (this._skb.getSignedInt (this._offset + DATA_SQN_OFFSET));
 	}
 
-	public final void setSequenceNumber (SequenceNumber data_sqn) {
+	public final void setDataSequenceNumber (SequenceNumber data_sqn) {
 		this._skb.setUnsignedInt (this._offset + DATA_SQN_OFFSET, data_sqn.longValue());
 	}
 
-	public final SequenceNumber getTrail() {
+	public final SequenceNumber getDataTrail() {
 		return SequenceNumber.fromIntBits (this._skb.getSignedInt (this._offset + DATA_TRAIL_OFFSET));
 	}
 
-	public final void setTrail (SequenceNumber data_trail) {
+	public final void setDataTrail (SequenceNumber data_trail) {
 		this._skb.setUnsignedInt (this._offset + DATA_TRAIL_OFFSET, data_trail.longValue());
 	}
 
@@ -70,8 +70,8 @@ public class OriginalData {
 		       ", \"checksum\": 0x" + Integer.toHexString (header.getChecksum()) +
 		       ", \"gsi\": \"" + header.getGlobalSourceId() + "\"" +
 		       ", \"tsduLength\": " + header.getTsduLength() +
-		       ", \"dataSqn\": " + getSequenceNumber() +
-		       ", \"dataTrail\": " + getTrail() +
+		       ", \"dataSqn\": " + getDataSequenceNumber() +
+		       ", \"dataTrail\": " + getDataTrail() +
 		       ", \"dataData\": \"" + getDataAsString() + "\"" +
 		        " }";
 	}

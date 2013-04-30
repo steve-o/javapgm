@@ -10,7 +10,7 @@ javac \
 	src/Header.java \
 	src/Ints.java \
 	src/NakConfirmPacket.java \
-	src/NakPacket.java \
+	src/Nak.java \
 	src/NullNakPacket.java \
 	src/OptionFragment.java \
 	src/OptionHeader.java \
@@ -24,5 +24,6 @@ javac \
 	src/SequenceNumber.java \
 	src/SocketBuffer.java \
 	src/SourcePathMessage.java \
+	src/SourcePathMessageRequest.java \
 	src/TransportSessionId.java \
 	src/UnsignedInts.java

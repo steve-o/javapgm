@@ -22,12 +22,20 @@ public class Header {
 		return (0 != getChecksum());
 	}
 
+	public void setChecksum (int csum) {
+		this._skb.setUnsignedShort (this._offset + Packet.PGM_CHECKSUM_OFFSET, csum);
+	}
+
 	public void clearChecksum() {
-		this._skb.setUnsignedShort (this._offset + Packet.PGM_CHECKSUM_OFFSET, 0);
+		setChecksum (0);
 	}
 
 	public final int getType() {
 		return this._skb.getUnsignedByte (this._offset + Packet.PGM_TYPE_OFFSET);
+	}
+
+	public void setType (int pgm_type) {
+		this._skb.setUnsignedByte (this._offset + Packet.PGM_TYPE_OFFSET, pgm_type);
 	}
 
 	public final String getTypeAsString() {
@@ -97,12 +105,24 @@ public class Header {
 		return new GlobalSourceId (buf);
 	}
 
+	public void setGlobalSourceId (GlobalSourceId gsi) {
+		System.arraycopy (gsi.getAsBytes(), 0, this._skb.getRawBytes(), this._offset + Packet.PGM_GSI_OFFSET, GlobalSourceId.SIZE);
+	}
+
 	public final int getSourcePort() {
 		return this._skb.getUnsignedShort (this._offset + Packet.PGM_SPORT_OFFSET);
 	}
 
+	public void setSourcePort (int sport) {
+		this._skb.setUnsignedShort (this._offset + Packet.PGM_SPORT_OFFSET, sport);
+	}
+
 	public final int getDestinationPort() {
 		return this._skb.getUnsignedShort (this._offset + Packet.PGM_DPORT_OFFSET);
+	}
+
+	public void setDestinationPort (int dport) {
+		this._skb.setUnsignedShort (this._offset + Packet.PGM_DPORT_OFFSET, dport);
 	}
 
 	public final TransportSessionId getTransportSessionId() {

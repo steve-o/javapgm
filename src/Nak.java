@@ -5,7 +5,7 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
-public class NakPacket {
+public class Nak {
 
 	protected SocketBuffer	_skb = null;
 	protected int		_offset = 0;
@@ -30,24 +30,41 @@ public class NakPacket {
 
 	private static final int SIZEOF_INADDR			= 4;
 	private static final int SIZEOF_INADDR6			= 16;
+	private static final int SIZEOF_PGM_NAK			= 20;
 
-	public NakPacket (SocketBuffer skb, int offset) {
+	public Nak (SocketBuffer skb, int offset) {
 		this._skb = skb;
 		this._offset = offset;
 	}
 
-	public final long getSequenceNumber() {
+	public static SocketBuffer create() {
+		SocketBuffer skb = new SocketBuffer (Packet.SIZEOF_PGM_HEADER + SIZEOF_PGM_NAK);
+		skb.setHeaderOffset (0);
+		skb.getHeader().setType (Packet.PGM_NAK);
+		skb.pull (Packet.SIZEOF_PGM_HEADER);
+		return skb;
+	}
+
+	public final long getNakSequenceNumber() {
 		return this._skb.getUnsignedInt (this._offset + NAK_SQN_OFFSET);
 	}
 
-	public final int getSourcePathAddressFamilyIndicator() {
+	public void setNakSequenceNumber (SequenceNumber nak_sqn) {
+		this._skb.setUnsignedInt (this._offset + NAK_SQN_OFFSET, nak_sqn.longValue());
+	}
+
+	public final int getNakSourceNlaAfi() {
 		return this._skb.getUnsignedShort (this._offset + NAK_SRC_NLA_AFI_OFFSET);
 	}
 
-	public final String getSourcePath() {
+	private void setNakSourceNlaAfi (int afi) {
+		this._skb.setUnsignedShort (this._offset + NAK_SRC_NLA_AFI_OFFSET, afi);
+	}
+
+	public final InetAddress getNakSourceNla() {
 		InetAddress nak_src_nla = null;
 		try {
-			switch (getSourcePathAddressFamilyIndicator()) {
+			switch (getNakSourceNlaAfi()) {
 			case Packet.AFI_IP:
 				byte[] in_addr = new byte[SIZEOF_INADDR];
 				System.arraycopy (this._skb.getRawBytes(), this._offset + NAK_SRC_NLA_OFFSET,
@@ -66,14 +83,25 @@ public class NakPacket {
 				break;
 			}
 		} catch (UnknownHostException e) {}
-		if (null == nak_src_nla)
-			return "unknown";
-		else
-			return nak_src_nla.toString();
+		return nak_src_nla;
 	}
 
-	public final int getGroupPathAddressFamilyIndicator() {
-		switch (getSourcePathAddressFamilyIndicator()) {
+	public void setNakSourceNla (InetAddress nak_src_nla) {
+		if (Inet4Address.class.isInstance (nak_src_nla)) {
+			setNakSourceNlaAfi (Packet.AFI_IP);
+			System.arraycopy (nak_src_nla.getAddress(), 0,
+					  this._skb.getRawBytes(), this._offset + NAK_SRC_NLA_OFFSET,
+					  SIZEOF_INADDR);
+		} else if (Inet6Address.class.isInstance (nak_src_nla)) {
+			setNakSourceNlaAfi (Packet.AFI_IP6);
+			System.arraycopy (nak_src_nla.getAddress(), 0,
+					  this._skb.getRawBytes(), this._offset + NAK_SRC_NLA_OFFSET,
+					  SIZEOF_INADDR6);
+		}
+	}
+
+	public final int getNakGroupNlaAfi() {
+		switch (getNakSourceNlaAfi()) {
 		case Packet.AFI_IP:
 			return this._skb.getUnsignedShort (this._offset + NAK_GRP_NLA_AFI_OFFSET);
 		case Packet.AFI_IP6:
@@ -83,10 +111,23 @@ public class NakPacket {
 		}
 	}
 
-	public final String getGroupPath() {
+	private void setNakGroupNlaAfi (int afi) {
+		switch (getNakSourceNlaAfi()) {
+		case Packet.AFI_IP:
+			this._skb.setUnsignedShort (this._offset + NAK_GRP_NLA_AFI_OFFSET, afi);
+			break;
+		case Packet.AFI_IP6:
+			this._skb.setUnsignedShort (this._offset + NAK6_GRP_NLA_AFI_OFFSET, afi);
+			break;
+		default:
+			break;
+		}
+	}
+
+	public final InetAddress getNakGroupNla() {
 		InetAddress nak_grp_nla = null;
 		int nak_grp_nla_offset;
-		switch (getSourcePathAddressFamilyIndicator()) {
+		switch (getNakSourceNlaAfi()) {
 		case Packet.AFI_IP:
 			nak_grp_nla_offset = NAK_GRP_NLA_OFFSET;
 			break;
@@ -94,10 +135,10 @@ public class NakPacket {
 			nak_grp_nla_offset = NAK6_GRP_NLA_OFFSET;
 			break;
 		default:
-			return "invalid";
+			return nak_grp_nla;
 		}
 		try {
-			switch (getGroupPathAddressFamilyIndicator()) {
+			switch (getNakGroupNlaAfi()) {
 			case Packet.AFI_IP:
 				byte[] in_addr = new byte[SIZEOF_INADDR];
 				System.arraycopy (this._skb.getRawBytes(), this._offset + nak_grp_nla_offset,
@@ -116,10 +157,32 @@ public class NakPacket {
 				break;
 			}
 		} catch (UnknownHostException e) {}
-		if (null == nak_grp_nla)
-			return "unknown";
-		else
-			return nak_grp_nla.toString();
+		return nak_grp_nla;
+	}
+
+	public void setNakGroupNla (InetAddress nak_grp_nla) {
+		int nak_grp_nla_offset;
+		switch (getNakSourceNlaAfi()) {
+		case Packet.AFI_IP:
+			nak_grp_nla_offset = NAK_GRP_NLA_OFFSET;
+			break;
+		case Packet.AFI_IP6:
+			nak_grp_nla_offset = NAK6_GRP_NLA_OFFSET;
+			break;
+		default:
+			return;
+		}
+		if (Inet4Address.class.isInstance (nak_grp_nla)) {
+			setNakGroupNlaAfi (Packet.AFI_IP);
+			System.arraycopy (nak_grp_nla.getAddress(), 0,
+					  this._skb.getRawBytes(), this._offset + nak_grp_nla_offset,
+					  SIZEOF_INADDR);
+		} else if (Inet6Address.class.isInstance (nak_grp_nla)) {
+			setNakGroupNlaAfi (Packet.AFI_IP6);
+			System.arraycopy (nak_grp_nla.getAddress(), 0,
+					  this._skb.getRawBytes(), this._offset + nak_grp_nla_offset,
+					  SIZEOF_INADDR6);
+		}
 	}
 
 	public String toString() {
@@ -132,11 +195,11 @@ public class NakPacket {
 		       ", \"checksum\": 0x" + Integer.toHexString (header.getChecksum()) +
 		       ", \"gsi\": \"" + header.getGlobalSourceId() + "\"" +
 		       ", \"tsduLength\": " + header.getTsduLength() +
-		       ", \"nakSqn\": " + getSequenceNumber() +
-		       ", \"nakSrcNlaAfi\": " + getSourcePathAddressFamilyIndicator() +
-		       ", \"nakSrcNla\": " + getSourcePath() +
-		       ", \"nakGrpNlaAfi\": " + getGroupPathAddressFamilyIndicator() +
-		       ", \"nakGrpNla\": " + getGroupPath() +
+		       ", \"nakSqn\": " + getNakSequenceNumber() +
+		       ", \"nakSrcNlaAfi\": " + getNakSourceNlaAfi() +
+		       ", \"nakSrcNla\": " + getNakSourceNla() +
+		       ", \"nakGrpNlaAfi\": " + getNakGroupNlaAfi() +
+		       ", \"nakGrpNla\": " + getNakGroupNla() +
 		        "}";
 	}
 }

@@ -35,6 +35,7 @@ public class testreceive
 	ByteBuffer buffer = null;
 	SocketBuffer rx_buffer = null;
 	InetAddress group = null;
+	MulticastSocket send_sock = null;
 /* Workaround Java lack of pass-by-reference for source peer. */
 	Peer[] source = new Peer[1];
 	Hashtable<TransportSessionId, Peer> peers = new Hashtable<TransportSessionId, Peer>();
@@ -55,6 +56,7 @@ public class testreceive
 	public testreceive (String[] args) throws IOException
 	{
 		this.group = InetAddress.getByName (this.networkGroup);
+		this.send_sock = new MulticastSocket();
 		ProtocolFamily pf = this.group instanceof Inet4Address ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
 		NetworkInterface ni = NetworkInterface.getByName (this.interfaceName);
 		if (null == ni) ni = NetworkInterface.getByInetAddress (InetAddress.getByName (this.interfaceName));
@@ -354,7 +356,7 @@ System.out.println ("ReceiveWindow.add returned " + addStatus);
 		if (spm.getSpmSequenceNumber().gte (source.getSpmSequenceNumber()))
 		{
 /* copy NLA for replies */
-			source.setNetworkLayerAddress (spm.getNetworkLayerAddress());
+			source.setNetworkLayerAddress (spm.getSpmNla());
 
 /* save sequence number */
 			source.setSpmSequenceNumber (spm.getSpmSequenceNumber());
@@ -810,13 +812,67 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 	private boolean sendSpmr (Peer peer)
 	{
 		System.out.println ("sendSpmr");
-		return true;
+
+		SocketBuffer skb = SourcePathMessageRequest.create();
+		Header header = skb.getHeader();
+		header.setGlobalSourceId (peer.getTransportSessionId().getGlobalSourceId());
+/* dport & sport reversed communicating upstream */
+		header.setSourcePort (this.dataDestinationPort);
+		header.setDestinationPort (this.dataSourcePort);
+		header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
+
+		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
+							 skb.getDataOffset(),
+							 skb.getLength(),
+							 this.group,
+							 this.udpEncapsulationPort);
+		try {
+			this.send_sock.send (pkt);
+			return true;
+		} catch (java.io.IOException e) {
+			System.out.println (e.toString());
+			return false;
+		}
 	}
 
 	private boolean sendNak (Peer peer, SequenceNumber sequence)
 	{
 		System.out.println ("sendNak");
-		return true;
+
+		SocketBuffer skb = Nak.create();
+		Header header = skb.getHeader();
+		Nak nak = new Nak (skb, skb.getDataOffset());
+		header.setGlobalSourceId (peer.getTransportSessionId().getGlobalSourceId());
+
+/* dport & sport swap over for a nak */
+		header.setSourcePort (this.dataDestinationPort);
+		header.setDestinationPort (this.dataSourcePort);
+
+/* NAK */
+		nak.setNakSequenceNumber (sequence);
+
+/* source nla */
+		nak.setNakSourceNla (peer.getNetworkLayerAddress());
+
+/* group nla: we match the NAK NLA to the same as advertised by the source, we might
+ * be listening to multiple multicast groups
+ */
+		nak.setNakGroupNla (this.group);
+
+		header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
+
+		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
+							 0,
+							 skb.getRawBytes().length,
+							 this.group,
+							 this.udpEncapsulationPort);
+		try {
+			this.send_sock.send (pkt);
+			return true;
+		} catch (java.io.IOException e) {
+			System.out.println (e.toString());
+			return false;
+		}	
 	}
 
 	private boolean sendNakList (Peer peer, ArrayList<SequenceNumber> sqn_list)
