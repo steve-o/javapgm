@@ -4,6 +4,8 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
+import javax.annotation.Nullable;
+
 public class SocketBuffer {
 
 	private Socket			_socket = null;
@@ -56,6 +58,15 @@ public class SocketBuffer {
 
 	public void setSequenceNumber (SequenceNumber sequence) {
 		this._sequence = sequence;
+	}
+
+	@Override
+	public boolean equals (@Nullable Object obj) {
+		if (obj instanceof SocketBuffer) {
+			SocketBuffer other = (SocketBuffer)obj;
+			return getSequenceNumber().equals (other.getSequenceNumber());
+		}
+		return false;
 	}
 
 	public byte[] getRawBytes() {

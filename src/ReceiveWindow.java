@@ -599,6 +599,7 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
 	private Returns insert (SocketBuffer skb)
 	{
 System.out.println ("insert");
+		SocketBuffer placeholder = null;
 		State state = null;
 
 		if (isInvalidVarPktLen (skb) || isInvalidPayloadOption (skb)) {
@@ -610,15 +611,15 @@ System.out.println ("insert");
 			return Returns.RXW_MALFORMED;
 		} else {
 			final int index = (int)(skb.getSequenceNumber().longValue() % getMaxLength());
-			skb = this.pdata[index];
-			state = (State)skb.getControlBuffer();
+			placeholder = this.pdata[index];
+			state = (State)placeholder.getControlBuffer();
 			if (state.pktState == PacketState.PKT_HAVE_DATA_STATE)
 				return Returns.RXW_DUPLICATE;
 		}
 
 /* APDU fragments are already declared lost */
 		if (skb.isFragment() && isApduLost (skb)) {
-			markLost (skb.getSequenceNumber());
+			markLost (placeholder.getSequenceNumber());
 			return Returns.RXW_BOUNDS;
 		}
 
@@ -629,7 +630,7 @@ System.out.println ("insert");
 		case PKT_LOST_DATA_STATE:
 			break;
 		case PKT_HAVE_PARITY_STATE:
-			shuffleParity (skb);
+			shuffleParity (placeholder);
 			break;
 		default:
 			System.exit (-1);
