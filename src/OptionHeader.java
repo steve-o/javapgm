@@ -50,6 +50,10 @@ public class OptionHeader {
 		return ((getRawType() & OPT_END) == OPT_END);
 	}
 
+	public void setLastOption() {
+		this._skb.setUnsignedByte (this._offset + OPT_TYPE_OFFSET, getRawType() | OPT_END);
+	}
+
 	public final int getOffset() {
 		return this._offset;
 	}

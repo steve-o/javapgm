@@ -99,6 +99,10 @@ public class Header {
 		return ((getOptions() & Packet.PGM_OP_ENCODED) == Packet.PGM_OP_ENCODED);
 	}
 
+	public void setOptions (int options) {
+		this._skb.setUnsignedByte (this._offset + Packet.PGM_OPTIONS_OFFSET, options);
+	}
+
 	public final GlobalSourceId getGlobalSourceId() {
 		byte[] buf = new byte[GlobalSourceId.SIZE];
 		System.arraycopy (this._skb.getRawBytes(), this._offset + Packet.PGM_GSI_OFFSET, buf, 0, GlobalSourceId.SIZE);

@@ -839,7 +839,7 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 	{
 		System.out.println ("sendNak");
 
-		SocketBuffer skb = Nak.create();
+		SocketBuffer skb = Nak.create (peer.getNetworkLayerAddress(), this.group);
 		Header header = skb.getHeader();
 		Nak nak = new Nak (skb, skb.getDataOffset());
 		header.setGlobalSourceId (peer.getTransportSessionId().getGlobalSourceId());
@@ -878,7 +878,43 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 	private boolean sendNakList (Peer peer, ArrayList<SequenceNumber> sqn_list)
 	{
 		System.out.println ("sendNakList");
-		return true;
+
+		SocketBuffer skb = Nak.create (peer.getNetworkLayerAddress(), this.group, sqn_list.size());
+		Header header = skb.getHeader();
+		Nak nak = new Nak (skb, skb.getDataOffset());
+		header.setGlobalSourceId (peer.getTransportSessionId().getGlobalSourceId());
+
+/* dport & sport swap over for a nak */
+		header.setSourcePort (this.dataDestinationPort);
+		header.setDestinationPort (this.dataSourcePort);
+		header.setOptions (Packet.PGM_OPT_PRESENT | Packet.PGM_OPT_NETWORK);
+
+/* NAK */
+		nak.setNakSequenceNumber (sqn_list.get (0));
+
+/* source nla */
+		nak.setNakSourceNla (peer.getNetworkLayerAddress());
+
+/* group nla */
+		nak.setNakGroupNla (this.group);
+
+/* OPT_NAK_LIST */
+		nak.setNakListOption (sqn_list.subList (1, sqn_list.size()).toArray (new SequenceNumber[0]));
+
+		header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
+
+		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
+							 0,
+							 skb.getRawBytes().length,
+							 this.group,
+							 this.udpEncapsulationPort);
+		try {
+			this.send_sock.send (pkt);
+			return true;
+		} catch (java.io.IOException e) {
+			System.out.println (e.toString());
+			return false;
+		}
 	}
 
 	private void cancel (Peer peer, SocketBuffer skb, long now)

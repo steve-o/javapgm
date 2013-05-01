@@ -31,18 +31,35 @@ public class Nak {
 	private static final int SIZEOF_INADDR			= 4;
 	private static final int SIZEOF_INADDR6			= 16;
 	private static final int SIZEOF_PGM_NAK			= 20;
+	private static final int SIZEOF_PGM_NAK6		= 44;
+	private static final int SIZEOF_PGM_OPT_LENGTH		= 4;
+	private static final int SIZEOF_PGM_OPT_HEADER		= 3;
+	private static final int SIZEOF_PGM_OPT_RESERVED	= 1;
+	private static final int SIZEOF_PGM_SQN			= 4;
 
 	public Nak (SocketBuffer skb, int offset) {
 		this._skb = skb;
 		this._offset = offset;
 	}
 
-	public static SocketBuffer create() {
-		SocketBuffer skb = new SocketBuffer (Packet.SIZEOF_PGM_HEADER + SIZEOF_PGM_NAK);
+	public static SocketBuffer create (InetAddress nak_src_nla, InetAddress nak_grp_nla, int count) {
+		int tpdu_length = Packet.SIZEOF_PGM_HEADER + SIZEOF_PGM_NAK;
+		if (Inet6Address.class.isInstance (nak_src_nla))
+			tpdu_length += SIZEOF_PGM_NAK6 - SIZEOF_PGM_NAK;
+		if (count > 1)
+			tpdu_length += SIZEOF_PGM_OPT_LENGTH +
+				       SIZEOF_PGM_OPT_HEADER +
+				       SIZEOF_PGM_OPT_RESERVED +
+				       ( (count-1) * SIZEOF_PGM_SQN );
+		SocketBuffer skb = new SocketBuffer (tpdu_length);
 		skb.setHeaderOffset (0);
 		skb.getHeader().setType (Packet.PGM_NAK);
 		skb.pull (Packet.SIZEOF_PGM_HEADER);
 		return skb;
+	}
+
+	public static SocketBuffer create (InetAddress nak_src_nla, InetAddress nak_grp_nla) {
+		return create (nak_src_nla, nak_grp_nla, 1);
 	}
 
 	public final long getNakSequenceNumber() {
@@ -183,6 +200,27 @@ public class Nak {
 					  this._skb.getRawBytes(), this._offset + nak_grp_nla_offset,
 					  SIZEOF_INADDR6);
 		}
+	}
+
+/* TODO: TLC wanted */
+	public void setNakListOption (SequenceNumber[] sqn_list) {
+		int opt_nak_list_offset;
+		switch (getNakSourceNlaAfi()) {
+		case Packet.AFI_IP:
+			opt_nak_list_offset = NAK_OPTIONS_OFFSET;
+			break;
+		case Packet.AFI_IP6:
+			opt_nak_list_offset = NAK6_OPTIONS_OFFSET;
+			break;
+		default:
+			return;
+		}
+		OptionLength optLength = OptionLength.create (this._skb, this._offset + opt_nak_list_offset);
+		OptionNakList optNakList = OptionNakList.create (this._skb, optLength.getOffset() + optLength.getLength(), sqn_list.length);
+		for (int i = 0; i < sqn_list.length; i++)
+			optNakList.setOptionSequence (i, sqn_list[i]);
+		new OptionHeader (this._skb, optNakList.getOffset()).setLastOption();
+		optLength.setTotalLength (optLength.getLength() + optNakList.getLength());
 	}
 
 	public String toString() {

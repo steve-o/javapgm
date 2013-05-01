@@ -14,6 +14,8 @@ javac \
 	src/NullNakPacket.java \
 	src/OptionFragment.java \
 	src/OptionHeader.java \
+	src/OptionLength.java \
+	src/OptionNakList.java \
 	src/OriginalData.java \
 	src/Packet.java \
 	src/Peer.java \
