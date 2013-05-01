@@ -80,6 +80,11 @@ public class SocketBuffer {
 		this._data += len;
 	}
 
+	public void reserve (int len) {
+		this._data += len;
+		this._tail += len;
+	}
+
 	public Header getHeader() {
 		return this._header;
 	}
@@ -182,6 +187,17 @@ public class SocketBuffer {
 			  "\"timestamp\": " + this._timestamp +
 			", \"tsi\": \"" + this._tsi + "\"" +
 			", \"sequence\": " + this._sequence +
+			", \"len\": " + this._len +
+			", \"header\": " + this._header +
+			", \"odata\": " + this._odata +
+			", \"opt_fragment\": " + this._opt_fragment +
+			", \"buf\": { " +
+				  "\"head\": " + this._head +
+				", \"data\": " + this._data +
+				", \"tail\": " + this._tail +
+				", \"end\": " + this._end +
+				", \"length\": " + this._buf.length +
+			" }" +
 			" }";
 	}
 }

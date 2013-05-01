@@ -54,7 +54,7 @@ public class Nak {
 		SocketBuffer skb = new SocketBuffer (tpdu_length);
 		skb.setHeaderOffset (0);
 		skb.getHeader().setType (Packet.PGM_NAK);
-		skb.pull (Packet.SIZEOF_PGM_HEADER);
+		skb.reserve (Packet.SIZEOF_PGM_HEADER);
 		return skb;
 	}
 

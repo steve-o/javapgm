@@ -223,6 +223,7 @@ if (Math.random() < 0.25) {
 
 		if (skb.getHeader().getDestinationPort() != this.dataDestinationPort) {
 			System.out.println ("Discarded packet on data-destination port mismatch.");
+			System.out.println ("Data-destination port: " + skb.getHeader().getDestinationPort());
 			return false;
 		}
 
@@ -238,8 +239,9 @@ if (Math.random() < 0.25) {
 		skb.pull (Packet.SIZEOF_PGM_HEADER);
 
 		switch (skb.getHeader().getType()) {
-		case Packet.PGM_ODATA:
 		case Packet.PGM_RDATA:
+			System.out.println ("********* REPAIR DATA ***************");
+		case Packet.PGM_ODATA:
 			if (!this.onData (source[0], skb))
 				return false;
 			break;
@@ -818,7 +820,7 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 		header.setGlobalSourceId (peer.getTransportSessionId().getGlobalSourceId());
 /* dport & sport reversed communicating upstream */
 		header.setSourcePort (this.dataDestinationPort);
-		header.setDestinationPort (this.dataSourcePort);
+		header.setDestinationPort (peer.getSourcePort());
 		header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
 
 		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
@@ -846,7 +848,7 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 
 /* dport & sport swap over for a nak */
 		header.setSourcePort (this.dataDestinationPort);
-		header.setDestinationPort (this.dataSourcePort);
+		header.setDestinationPort (peer.getSourcePort());
 
 /* NAK */
 		nak.setNakSequenceNumber (sequence);
@@ -864,10 +866,12 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
 							 0,
 							 skb.getRawBytes().length,
-							 this.group,
+							 peer.getNetworkLayerAddress(),
 							 this.udpEncapsulationPort);
 		try {
 			this.send_sock.send (pkt);
+			System.out.println ("Sent NAK to " + peer.getNetworkLayerAddress());
+			System.out.println ("NAK: " + skb);
 			return true;
 		} catch (java.io.IOException e) {
 			System.out.println (e.toString());
@@ -886,7 +890,7 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 
 /* dport & sport swap over for a nak */
 		header.setSourcePort (this.dataDestinationPort);
-		header.setDestinationPort (this.dataSourcePort);
+		header.setDestinationPort (peer.getSourcePort());
 		header.setOptions (Packet.PGM_OPT_PRESENT | Packet.PGM_OPT_NETWORK);
 
 /* NAK */
@@ -906,10 +910,11 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
 							 0,
 							 skb.getRawBytes().length,
-							 this.group,
+							 peer.getNetworkLayerAddress(),
 							 this.udpEncapsulationPort);
 		try {
 			this.send_sock.send (pkt);
+			System.out.println ("Sent NAK to " + peer.getNetworkLayerAddress());
 			return true;
 		} catch (java.io.IOException e) {
 			System.out.println (e.toString());

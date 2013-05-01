@@ -136,6 +136,37 @@ public class Header {
 	public final int getTsduLength() {
 		return this._skb.getUnsignedShort (this._offset + Packet.PGM_TSDU_LENGTH_OFFSET);
 	}
+
+	public String toString() {
+		StringBuilder options = new StringBuilder();
+		if (isParity())
+			options.append ("OPT_PARITY");
+		if (isVariablePacketLength()) {
+			if (options.length() > 0) options.append ("| ");
+			options.append ("OPT_VAR_PKTLEN");
+		}
+		if (isNetworkSignificant()) {
+			if (options.length() > 0) options.append ("| ");
+			options.append ("OPT_NETWORK");
+		}
+		if (isOptionExtensionPresent()) {
+			if (options.length() > 0) options.append ("| ");
+			options.append ("OPT_PRESENT");
+		}
+		if (isOptionEncoded()) {
+			if (options.length() > 0) options.append ("| ");
+			options.append ("OP_ENCODED");
+		}
+		return  " { " +
+			  "\"pgm_sport\": " + getSourcePort() +
+			", \"pgm_dport\": " + getDestinationPort() +
+			", \"pgm_type\": \"" + getTypeAsString() + "\"" +
+			", \"pgm_options\": \"" + options + "\"" +
+			", \"pgm_checksum\": " + getChecksum() +
+			", \"pgm_gsi\": \"" + getGlobalSourceId() + "\"" +
+			", \"pgm_tsdu_length\": " + getTsduLength() +
+			" }";
+	}
 }
 
 /* eof */

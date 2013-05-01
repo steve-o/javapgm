@@ -49,6 +49,10 @@ public class Peer {
 		return this.tsi;
 	}
 
+	public int getSourcePort() {
+		return this.tsi.getSourcePort();
+	}
+
 	public void setGroupPath (InetAddress groupPath) {
 		this.groupPath = groupPath;
 	}
