@@ -1,5 +1,5 @@
 #!/bin/sh
 
 java \
-	-cp src \
+	-cp target/classes \
 	testreceive $*
