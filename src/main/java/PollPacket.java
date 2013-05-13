@@ -1,38 +1,40 @@
 /* Poll packet for starting receiver poll rounds.
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
+@SuppressWarnings("unused")
 public class PollPacket {
 
 	protected SocketBuffer	_skb = null;
-	protected int		_offset = 0;
+	protected int			_offset = 0;
 
-	private static final int POLL_SQN_OFFSET	= 0;
-	private static final int POLL_ROUND_OFFSET	= 4;
-	private static final int POLL_S_TYPE_OFFSET	= 6;
+	private static final int POLL_SQN_OFFSET		= 0;
+	private static final int POLL_ROUND_OFFSET		= 4;
+	private static final int POLL_S_TYPE_OFFSET		= 6;
 	private static final int POLL_NLA_AFI_OFFSET	= 8;
 	private static final int POLL_RESERVED_OFFSET	= 10;
-	private static final int POLL_NLA_OFFSET	= 12;
-	private static final int POLL_BO_IVL_OFFSET	= 16;
-	private static final int POLL_RAND_OFFSET	= 20;
-	private static final int POLL_MASK_OFFSET	= 24;
+	private static final int POLL_NLA_OFFSET		= 12;
+	private static final int POLL_BO_IVL_OFFSET		= 16;
+	private static final int POLL_RAND_OFFSET		= 20;
+	private static final int POLL_MASK_OFFSET		= 24;
 	private static final int POLL_OPTIONS_OFFSET	= 28;
 
-	private static final int POLL6_SQN_OFFSET	= 0;
-	private static final int POLL6_ROUND_OFFSET	= 4;
+	private static final int POLL6_SQN_OFFSET		= 0;
+	private static final int POLL6_ROUND_OFFSET		= 4;
 	private static final int POLL6_S_TYPE_OFFSET	= 6;
 	private static final int POLL6_NLA_AFI_OFFSET	= 8;
 	private static final int POLL6_RESERVED_OFFSET	= 10;
-	private static final int POLL6_NLA_OFFSET	= 12;
+	private static final int POLL6_NLA_OFFSET		= 12;
 	private static final int POLL6_BO_IVL_OFFSET	= 28;
-	private static final int POLL6_RAND_OFFSET	= 32;
-	private static final int POLL6_MASK_OFFSET	= 36;
+	private static final int POLL6_RAND_OFFSET		= 32;
+	private static final int POLL6_MASK_OFFSET		= 36;
 	private static final int POLL6_OPTIONS_OFFSET	= 40;
 
-	private static final int SIZEOF_INADDR		= 4;
-	private static final int SIZEOF_INADDR6		= 16;
+	private static final int SIZEOF_INADDR	= 4;
+	private static final int SIZEOF_INADDR6	= 16;
 
 	public PollPacket (SocketBuffer skb, int offset) {
 		this._skb = skb;

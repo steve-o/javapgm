@@ -1,11 +1,20 @@
 /* UDP receiver example using reactor pattern.
  * Requires JDK 7 for selector API support for multicast sockets.
  */ 
-import java.io.*;
-import java.nio.*;
-import java.nio.channels.*;
-import java.net.*;
-import java.util.*;
+import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.ProtocolFamily;
+import java.net.SocketAddress;
+import java.net.StandardProtocolFamily;
+import java.net.StandardSocketOptions;
+import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.MembershipKey;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 
 public class channelrecv
 {
@@ -26,9 +35,11 @@ public class channelrecv
 			.bind (new InetSocketAddress (this.port))
 			.setOption (StandardSocketOptions.IP_MULTICAST_IF, ni);
 		dc.configureBlocking (false);
+		@SuppressWarnings("unused")
 		MembershipKey key = dc.join (group, ni);
 		ByteBuffer buffer = ByteBuffer.allocateDirect (this.max_tpdu);
 		Selector selector = Selector.open();
+		@SuppressWarnings("unused")
 		SelectionKey sk = dc.register (selector, SelectionKey.OP_READ);
 
 		while (true) {
@@ -41,7 +52,8 @@ public class channelrecv
 				buffer.get (bytes, 0, bytes.length);
 				buffer.clear();
 				System.out.println ("packet: { " +
-					  "\"data\": \"" + new String (bytes, 0, bytes.length) + "\"" +
+					  "\"src\": \"" + source + "\"" +
+					", \"data\": \"" + new String (bytes, 0, bytes.length) + "\"" +
 					", \"length\": " + bytes.length + "" +
 					" }");
 			}

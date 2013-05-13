@@ -1,12 +1,9 @@
 /* PGM Option NAK List Extension.
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
 
 public class OptionNakList {
 
-	protected SocketBuffer		_skb = null;
+	protected SocketBuffer	_skb = null;
 	protected int			_offset = 0;
 	protected int			_count = 0;
 

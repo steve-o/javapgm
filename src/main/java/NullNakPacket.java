@@ -1,16 +1,18 @@
 /* Null-NAK or NNAK packet.  Feedback by PGM infrastructure after
  * suppressing local network NAKs for adaptive parameter calculation.
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
+@SuppressWarnings("unused")
 public class NullNakPacket {
 
 	protected SocketBuffer	_skb = null;
-	protected int		_offset = 0;
+	protected int			_offset = 0;
 
-	private static final int NNAK_SQN_OFFSET		= 0;
+	private static final int NNAK_SQN_OFFSET			= 0;
 	private static final int NNAK_SRC_NLA_AFI_OFFSET	= 4;
 	private static final int NNAK_RESERVED_OFFSET		= 6;
 	private static final int NNAK_SRC_NLA_OFFSET		= 8;
@@ -19,7 +21,7 @@ public class NullNakPacket {
 	private static final int NNAK_GRP_NLA_OFFSET		= 16;
 	private static final int NNAK_OPTIONS_OFFSET		= 20;
 
-	private static final int NNAK6_SQN_OFFSET		= 0;
+	private static final int NNAK6_SQN_OFFSET			= 0;
 	private static final int NNAK6_SRC_NLA_AFI_OFFSET	= 4;
 	private static final int NNAK6_RESERVED_OFFSET		= 6;
 	private static final int NNAK6_SRC_NLA_OFFSET		= 8;
@@ -28,8 +30,8 @@ public class NullNakPacket {
 	private static final int NNAK6_GRP_NLA_OFFSET		= 28;
 	private static final int NNAK6_OPTIONS_OFFSET		= 44;
 
-	private static final int SIZEOF_INADDR			= 4;
-	private static final int SIZEOF_INADDR6			= 16;
+	private static final int SIZEOF_INADDR	= 4;
+	private static final int SIZEOF_INADDR6	= 16;
 
 	public NullNakPacket (SocketBuffer skb, int offset) {
 		this._skb = skb;

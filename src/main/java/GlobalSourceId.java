@@ -1,8 +1,11 @@
 /* Unique global source identifier.
  */
-import java.net.*;
-import java.security.*;
-import java.util.*;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Random;
 
 public class GlobalSourceId
 {

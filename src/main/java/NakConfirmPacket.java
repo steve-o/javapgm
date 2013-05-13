@@ -1,25 +1,27 @@
 /* NAK confirm packet or NCF is sent on immediate receipt of a NAK to suppress
  * other peer subscribers from sending their own NAK.
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
+@SuppressWarnings("unused")
 public class NakConfirmPacket {
 
 	protected SocketBuffer	_skb = null;
-	protected int		_offset = 0;
+	protected int			_offset = 0;
 
-	private static final int NCF_SQN_OFFSET			= 0;
+	private static final int NCF_SQN_OFFSET				= 0;
 	private static final int NCF_SRC_NLA_AFI_OFFSET		= 4;
 	private static final int NCF_RESERVED_OFFSET		= 6;
-	private static final int NCF_SRC_NLA_OFFSET		= 8;
+	private static final int NCF_SRC_NLA_OFFSET			= 8;
 	private static final int NCF_GRP_NLA_AFI_OFFSET		= 12;
 	private static final int NCF_RESERVED2_OFFSET		= 14;
-	private static final int NCF_GRP_NLA_OFFSET		= 16;
-	private static final int NCF_OPTIONS_OFFSET		= 20;
+	private static final int NCF_GRP_NLA_OFFSET			= 16;
+	private static final int NCF_OPTIONS_OFFSET			= 20;
 
-	private static final int NCF6_SQN_OFFSET		= 0;
+	private static final int NCF6_SQN_OFFSET			= 0;
 	private static final int NCF6_SRC_NLA_AFI_OFFSET	= 4;
 	private static final int NCF6_RESERVED_OFFSET		= 6;
 	private static final int NCF6_SRC_NLA_OFFSET		= 8;
@@ -28,8 +30,8 @@ public class NakConfirmPacket {
 	private static final int NCF6_GRP_NLA_OFFSET		= 28;
 	private static final int NCF6_OPTIONS_OFFSET		= 44;
 
-	private static final int SIZEOF_INADDR			= 4;
-	private static final int SIZEOF_INADDR6			= 16;
+	private static final int SIZEOF_INADDR	= 4;
+	private static final int SIZEOF_INADDR6	= 16;
 
 	public NakConfirmPacket (SocketBuffer skb, int offset) {
 		this._skb = skb;
@@ -141,3 +143,5 @@ public class NakConfirmPacket {
 	}
 
 }
+
+/* eof */

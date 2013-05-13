@@ -1,15 +1,12 @@
 /* PGM Option Fragment Extension.
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
 
 public class OptionFragment {
 
-	protected SocketBuffer		_skb = null;
+	protected SocketBuffer	_skb = null;
 	protected int			_offset = 0;
 
-	private static final int OPT_SQN_OFFSET		= 4;
+	private static final int OPT_SQN_OFFSET			= 4;
 	private static final int OPT_FRAG_OFF_OFFSET	= 8;
 	private static final int OPT_FRAG_LEN_OFFSET	= 12;
 

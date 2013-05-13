@@ -1,8 +1,9 @@
 /* Example of a basic UDP receiver sans selector.
  */
-import java.io.*;
-import java.util.*;
-import java.net.*;
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
 
 public class udpsend
 {

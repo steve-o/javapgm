@@ -1,19 +1,16 @@
 /* Original data or ODATA packet.  Used for wrapping first tranmission of data
  * on the wire.
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
 
 public class OriginalData {
 
-	protected SocketBuffer		_skb = null;
+	protected SocketBuffer	_skb = null;
 	protected int			_offset = 0;
 
-	public static final int SIZEOF_DATA_HEADER	= 8;
+	public static final int SIZEOF_DATA_HEADER		= 8;
 
-	private static final int DATA_SQN_OFFSET	= 0;
-	private static final int DATA_TRAIL_OFFSET	= 4;
+	private static final int DATA_SQN_OFFSET		= 0;
+	private static final int DATA_TRAIL_OFFSET		= 4;
 	private static final int DATA_OPTIONS_OFFSET	= SIZEOF_DATA_HEADER;
 
 	private static final int OPT_TOTAL_LENGTH_OFFSET = 2;

@@ -1,12 +1,9 @@
 /* PGM packet header.
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
 
 public class Header {
 
-	protected SocketBuffer		_skb = null;
+	protected SocketBuffer	_skb = null;
 	protected int			_offset = 0;
 
 	public Header (SocketBuffer skb, int offset) {

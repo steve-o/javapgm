@@ -1,11 +1,29 @@
 /* Example subscription to a PGM stream.
  */ 
 
-import java.io.*;
-import java.nio.*;
-import java.nio.channels.*;
-import java.net.*;
-import java.util.*;
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.MulticastSocket;
+import java.net.NetworkInterface;
+import java.net.ProtocolFamily;
+import java.net.StandardProtocolFamily;
+import java.net.StandardSocketOptions;
+import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.MembershipKey;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Queue;
 
 public class testreceive
 {
@@ -65,6 +83,7 @@ public class testreceive
 			.bind (new InetSocketAddress (this.udpEncapsulationPort))
 			.setOption (StandardSocketOptions.IP_MULTICAST_IF, ni);
 		this.dc.configureBlocking (false);
+		@SuppressWarnings("unused")
 		MembershipKey key = this.dc.join (this.group, ni);
 
 		this.buffer = ByteBuffer.allocateDirect (this.max_tpdu);
@@ -77,6 +96,7 @@ public class testreceive
 		});
 
 		Selector selector = Selector.open();
+		@SuppressWarnings("unused")
 		SelectionKey sk = this.dc.register (selector, SelectionKey.OP_READ);
 		while (true) {
 			final int keyCount = selector.select (1000);
@@ -404,9 +424,9 @@ System.out.println ("ReceiveWindow.add returned " + addStatus);
 System.out.println ("flushPeersPending");
 		int bytes_read = 0;
 		int data_read = 0;
-		ListIterator it = this.peers_pending.listIterator();
+		ListIterator<Peer> it = this.peers_pending.listIterator();
 		while (it.hasNext()) {
-			Peer peer = (Peer)it.next();
+			Peer peer = it.next();
 			if (peer.hasLastCommit() && peer.getLastCommit() < this.lastCommit)
 				peer.removeCommit();
 			final int peer_bytes = peer.read (skbs);

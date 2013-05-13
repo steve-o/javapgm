@@ -11,6 +11,7 @@
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 
+@SuppressWarnings("serial")
 public final class SequenceNumber extends Number implements Comparable<SequenceNumber> {
 	public static final SequenceNumber ZERO = fromIntBits (0);
 	public static final SequenceNumber ONE = fromIntBits (1);

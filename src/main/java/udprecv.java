@@ -1,8 +1,9 @@
 /* Example of basic UDP receiver not using a selector.
  */ 
-import java.io.*;
-import java.net.*;
-import java.util.*;
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
 
 public class udprecv
 {
@@ -22,7 +23,8 @@ public class udprecv
 				datagram = new DatagramPacket (buffer, buffer.length);
 				socket.receive (datagram);
 				System.out.println ("packet: { " +
-						  "\"data\": \"" + new String (datagram.getData(), datagram.getOffset(), datagram.getLength()) + "\"" +
+						  "\"src\": \"" + datagram.getAddress() + "\"" +
+						", \"data\": \"" + new String (datagram.getData(), datagram.getOffset(), datagram.getLength()) + "\"" +
 						", \"length\": " + datagram.getLength() + "" +
 						" }");
 			}

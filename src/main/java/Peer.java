@@ -1,9 +1,9 @@
 /* A peer in the context of the sock is another party on the network sending PGM
  * packets.
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
+import java.net.InetAddress;
+import java.util.List;
+import java.util.Queue;
 
 public class Peer {
 
@@ -81,7 +81,7 @@ public class Peer {
 		return this.spm_sqn;
 	}
 
-/* edge trigerred has receiver pending events
+/* Edge triggered has receiver pending events
  */
 	public boolean hasPending() {
 		if (!hasPendingLinkData() && this.window.hasEvent()) {

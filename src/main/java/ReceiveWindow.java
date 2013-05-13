@@ -1,9 +1,8 @@
 /* Receive window as a ring buffer.
  */
-import java.io.*;
-import java.net.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ReceiveWindow {
 
@@ -32,20 +31,20 @@ public class ReceiveWindow {
 	}
 
 	public static final long UINT32_MAX		= 4294967295L;
-	public static final int MAX_FRAGMENTS		= 16;
+	public static final int MAX_FRAGMENTS	= 16;
 	public static final int MAX_APDU		= MAX_FRAGMENTS * 1500;
 
-	protected TransportSessionId		tsi;
+	protected TransportSessionId tsi;
 
 	private class State implements ControlBuffer {
-		long				nakBackoffExpiration;
-		long				nakRepeatExpiration;
-		long				repairDataExpiration;
-		PacketState			pktState;
+		long			nakBackoffExpiration;
+		long			nakRepeatExpiration;
+		long			repairDataExpiration;
+		PacketState		pktState;
 		int				nakTransmitCount;
 		int				ncfRetryCount;
 		int				dataRetryCount;
-		boolean				isContiguous;
+		boolean			isContiguous;
 
 		public State (PacketState pktState)
 		{
@@ -58,9 +57,9 @@ public class ReceiveWindow {
 		}
 	}
 
-	protected Queue<SocketBuffer>		nakBackoffQueue;
-	protected Queue<SocketBuffer>		waitNakConfirmQueue;
-	protected Queue<SocketBuffer>		waitDataQueue;
+	protected Queue<SocketBuffer>	nakBackoffQueue;
+	protected Queue<SocketBuffer>	waitNakConfirmQueue;
+	protected Queue<SocketBuffer>	waitDataQueue;
 
 	protected long				lostCount;
 	protected long				fragmentCount;
@@ -68,9 +67,9 @@ public class ReceiveWindow {
 	protected long				committedCount;
 
 	protected int				max_tpdu;
-	protected SequenceNumber		lead, trail;
-	protected SequenceNumber		rxw_trail, rxw_trail_init;
-	protected SequenceNumber		commitLead;
+	protected SequenceNumber	lead, trail;
+	protected SequenceNumber	rxw_trail, rxw_trail_init;
+	protected SequenceNumber	commitLead;
 	protected boolean			isConstrained = true;
 	protected boolean			isDefined = false;
 	protected boolean			hasEvent = false;
@@ -88,7 +87,7 @@ public class ReceiveWindow {
 
 	protected int				size;
 	protected int				alloc;
-	protected SocketBuffer[]		pdata = null;
+	protected SocketBuffer[]	pdata = null;
 
 	public Queue<SocketBuffer> getNakBackoffQueue() {
 		return this.nakBackoffQueue;
