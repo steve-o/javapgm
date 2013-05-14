@@ -10,18 +10,18 @@ import java.net.UnknownHostException;
 public class Nak {
 
 	protected SocketBuffer	_skb = null;
-	protected int			_offset = 0;
+	protected int		_offset = 0;
 
-	private static final int NAK_SQN_OFFSET				= 0;
+	private static final int NAK_SQN_OFFSET			= 0;
 	private static final int NAK_SRC_NLA_AFI_OFFSET		= 4;
 	private static final int NAK_RESERVED_OFFSET		= 6;
-	private static final int NAK_SRC_NLA_OFFSET			= 8;
+	private static final int NAK_SRC_NLA_OFFSET		= 8;
 	private static final int NAK_GRP_NLA_AFI_OFFSET		= 12;
 	private static final int NAK_RESERVED2_OFFSET		= 14;
-	private static final int NAK_GRP_NLA_OFFSET			= 16;
-	private static final int NAK_OPTIONS_OFFSET			= 20;
+	private static final int NAK_GRP_NLA_OFFSET		= 16;
+	private static final int NAK_OPTIONS_OFFSET		= 20;
 
-	private static final int NAK6_SQN_OFFSET			= 0;
+	private static final int NAK6_SQN_OFFSET		= 0;
 	private static final int NAK6_SRC_NLA_AFI_OFFSET	= 4;
 	private static final int NAK6_RESERVED_OFFSET		= 6;
 	private static final int NAK6_SRC_NLA_OFFSET		= 8;
@@ -30,14 +30,14 @@ public class Nak {
 	private static final int NAK6_GRP_NLA_OFFSET		= 28;
 	private static final int NAK6_OPTIONS_OFFSET		= 44;
 
-	private static final int SIZEOF_INADDR				= 4;
-	private static final int SIZEOF_INADDR6				= 16;
-	private static final int SIZEOF_PGM_NAK				= 20;
-	private static final int SIZEOF_PGM_NAK6			= 44;
+	private static final int SIZEOF_INADDR			= 4;
+	private static final int SIZEOF_INADDR6			= 16;
+	private static final int SIZEOF_PGM_NAK			= 20;
+	private static final int SIZEOF_PGM_NAK6		= 44;
 	private static final int SIZEOF_PGM_OPT_LENGTH		= 4;
 	private static final int SIZEOF_PGM_OPT_HEADER		= 3;
 	private static final int SIZEOF_PGM_OPT_RESERVED	= 1;
-	private static final int SIZEOF_PGM_SQN				= 4;
+	private static final int SIZEOF_PGM_SQN			= 4;
 
 	public Nak (SocketBuffer skb, int offset) {
 		this._skb = skb;
@@ -225,6 +225,7 @@ public class Nak {
 		optLength.setTotalLength (optLength.getLength() + optNakList.getLength());
 	}
 
+        @Override
 	public String toString() {
 		Header header = this._skb.getHeader();
 		return  "{" +

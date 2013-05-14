@@ -4,10 +4,10 @@
 public class PollResponsePacket {
 
 	protected SocketBuffer	_skb = null;
-	protected int			_offset = 0;
+	protected int		_offset = 0;
 
-	private static final int POLR_SQN_OFFSET		= 0;
-	private static final int POLR_ROUND_OFFSET		= 4;
+	private static final int POLR_SQN_OFFSET	= 0;
+	private static final int POLR_ROUND_OFFSET	= 4;
 	private static final int POLR_RESERVED_OFFSET	= 6;
 	@SuppressWarnings("unused")
 	private static final int POLR_OPTIONS_OFFSET	= 8;
@@ -29,6 +29,7 @@ public class PollResponsePacket {
 		return this._skb.getUnsignedShort (this._offset + POLR_RESERVED_OFFSET);
 	}
 
+        @Override
 	public String toString() {
 		Header header = this._skb.getHeader();
 		return  "{" +

@@ -32,10 +32,12 @@ public class GlobalSourceId
 		setIdentifier (gsi.getAsBytes());
 	}
 
+        @Override
 	public int hashCode() {
 		return this.toString().hashCode();
 	}
 
+        @Override
 	public boolean equals (Object object) {
 		if (! (object instanceof GlobalSourceId))
 			return false;
@@ -64,12 +66,12 @@ public class GlobalSourceId
 			digest.update (hostname.getBytes ("US-ASCII"));
 		} catch (java.io.UnsupportedEncodingException e) {
 			System.out.println ("US-ASCII encoding not supported by JVM: " + e.toString());
-			e.printStackTrace();
 			digest.update (hostname.getBytes ());
 		}
 		setIdentifier (digest.digest());
 	}
 
+        @SuppressWarnings("PointlessBitwiseExpression")
 	public final void setIdentifier (Inet4Address addr) {
 		System.arraycopy (this.identifier, 0,
 				  addr.getAddress(), 0,
@@ -92,6 +94,7 @@ public class GlobalSourceId
 		this.identifier[5] = bytes[5];
 	}
 
+        @Override
 	public String toString() {
 		return String.valueOf (this.identifier[0] & 0xff) + '.'
 			+ String.valueOf (this.identifier[1] & 0xff) + '.'

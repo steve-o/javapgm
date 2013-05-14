@@ -1,8 +1,9 @@
 /* Checksum computation for PGM packets using one's complement arithmetic.
  */
+@SuppressWarnings("PointlessBitwiseExpression")
 public class PgmChecksum {
 
-	public static final long partial (byte[] buf, int offset, int length, long sum)
+	public static long partial (byte[] buf, int offset, int length, long sum)
 	{
 		int i = 0;
 		while (length > 1) {
@@ -19,20 +20,20 @@ public class PgmChecksum {
 		return sum;
 	}
 
-	public static final long partialCopy (byte[] src, int srcOffset, byte[] dst, int dstOffset, int length, long sum)
+	public static long partialCopy (byte[] src, int srcOffset, byte[] dst, int dstOffset, int length, long sum)
 	{
 		System.arraycopy (src, srcOffset, dst, dstOffset, length);
 		return PgmChecksum.partial (dst, dstOffset, length, sum);
 	}
 
-	public static final int fold (long sum)
+	public static int fold (long sum)
 	{
 		while ((sum >> 16) > 0)
 			sum = (sum & 0xffff) + (sum >> 16);
 		return sum == 0xffff ? (int)sum : (int)~sum;
 	}
 
-	public static final long blockAdd (long sum, long sum2, int offset)
+	public static long blockAdd (long sum, long sum2, int offset)
 	{
 		if ((offset & 1) > 0)
 			sum2 = ((sum2 & 0xff00ff) << 8) + ((sum2 >> 8) & 0xff00ff);

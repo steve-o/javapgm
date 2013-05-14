@@ -18,10 +18,12 @@ public class TransportSessionId
 		this.setSourcePort (tsi.getSourcePort());
 	}
 
+        @Override
 	public int hashCode() {
 		return this.toString().hashCode();
 	}
 
+        @Override
 	public boolean equals (Object object) {
 		if (null != object && (object instanceof TransportSessionId))
 		{
@@ -57,17 +59,18 @@ public class TransportSessionId
 		return bytes;
 	}
 
-	private final void setGlobalSourceId (GlobalSourceId gsi) {
+	private void setGlobalSourceId (GlobalSourceId gsi) {
 		this.gsi = gsi;
 	}
 
-	private final void setSourcePort (int sourcePort) {
+	private void setSourcePort (int sourcePort) {
 		if (sourcePort < 0 || sourcePort > 65535)
 			throw new IllegalArgumentException ("Invalid port: " + sourcePort);
 
 		this.sourcePort = sourcePort;
 	}
 
+        @Override
 	public String toString() {
 		return gsi.toString() + '.' + String.valueOf (sourcePort);
 	}

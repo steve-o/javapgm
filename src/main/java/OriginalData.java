@@ -5,12 +5,12 @@
 public class OriginalData {
 
 	protected SocketBuffer	_skb = null;
-	protected int			_offset = 0;
+	protected int		_offset = 0;
 
-	public static final int SIZEOF_DATA_HEADER		= 8;
+	public static final int SIZEOF_DATA_HEADER	= 8;
 
-	private static final int DATA_SQN_OFFSET		= 0;
-	private static final int DATA_TRAIL_OFFSET		= 4;
+	private static final int DATA_SQN_OFFSET	= 0;
+	private static final int DATA_TRAIL_OFFSET	= 4;
 	private static final int DATA_OPTIONS_OFFSET	= SIZEOF_DATA_HEADER;
 
 	private static final int OPT_TOTAL_LENGTH_OFFSET = 2;
@@ -57,6 +57,7 @@ public class OriginalData {
 		return new String (buf);
 	}
 
+        @Override
 	public String toString() {
 		Header header = this._skb.getHeader();
 		return  "{ " +

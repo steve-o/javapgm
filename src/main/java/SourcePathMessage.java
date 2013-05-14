@@ -10,22 +10,22 @@ import java.net.UnknownHostException;
 public class SourcePathMessage {
 
 	protected SocketBuffer	_skb = null;
-	protected int			_offset = 0;
+	protected int		_offset = 0;
 
-	private static final int SPM_SQN_OFFSET			= 0;
-	private static final int SPM_TRAIL_OFFSET		= 4;
-	private static final int SPM_LEAD_OFFSET		= 8;
-	private static final int SPM_NLA_AFI_OFFSET		= 12;
+	private static final int SPM_SQN_OFFSET		= 0;
+	private static final int SPM_TRAIL_OFFSET	= 4;
+	private static final int SPM_LEAD_OFFSET	= 8;
+	private static final int SPM_NLA_AFI_OFFSET	= 12;
 	private static final int SPM_RESERVED_OFFSET	= 14;
-	private static final int SPM_NLA_OFFSET			= 16;
-	private static final int SPM_OPTIONS_OFFSET		= 20;
+	private static final int SPM_NLA_OFFSET		= 16;
+	private static final int SPM_OPTIONS_OFFSET	= 20;
 
-	private static final int SPM6_SQN_OFFSET		= 0;
-	private static final int SPM6_TRAIL_OFFSET		= 4;
-	private static final int SPM6_LEAD_OFFSET		= 8;
+	private static final int SPM6_SQN_OFFSET	= 0;
+	private static final int SPM6_TRAIL_OFFSET	= 4;
+	private static final int SPM6_LEAD_OFFSET	= 8;
 	private static final int SPM6_NLA_AFI_OFFSET	= 12;
 	private static final int SPM6_RESERVED_OFFSET	= 14;
-	private static final int SPM6_NLA_OFFSET		= 16;
+	private static final int SPM6_NLA_OFFSET	= 16;
 	private static final int SPM6_OPTIONS_OFFSET	= 32;
 
 	private static final int SIZEOF_INADDR	= 4;
@@ -75,6 +75,7 @@ public class SourcePathMessage {
 		}
 	}
 
+        @Override
 	public String toString() {
 		Header header = this._skb.getHeader();
 		return  "{" +

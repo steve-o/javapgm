@@ -30,9 +30,9 @@ public class ReceiveWindow {
 		RXW_UNKNOWN
 	}
 
-	public static final long UINT32_MAX		= 4294967295L;
+	public static final long UINT32_MAX	= 4294967295L;
 	public static final int MAX_FRAGMENTS	= 16;
-	public static final int MAX_APDU		= MAX_FRAGMENTS * 1500;
+	public static final int MAX_APDU	= MAX_FRAGMENTS * 1500;
 
 	protected TransportSessionId tsi;
 
@@ -41,9 +41,9 @@ public class ReceiveWindow {
 		long			nakRepeatExpiration;
 		long			repairDataExpiration;
 		PacketState		pktState;
-		int				nakTransmitCount;
-		int				ncfRetryCount;
-		int				dataRetryCount;
+		int			nakTransmitCount;
+		int			ncfRetryCount;
+		int			dataRetryCount;
 		boolean			isContiguous;
 
 		public State (PacketState pktState)
@@ -61,32 +61,32 @@ public class ReceiveWindow {
 	protected Queue<SocketBuffer>	waitNakConfirmQueue;
 	protected Queue<SocketBuffer>	waitDataQueue;
 
-	protected long				lostCount;
-	protected long				fragmentCount;
-	protected long				parityCount;
-	protected long				committedCount;
+	protected long			lostCount;
+	protected long			fragmentCount;
+	protected long			parityCount;
+	protected long			committedCount;
 
-	protected int				max_tpdu;
+	protected int			max_tpdu;
 	protected SequenceNumber	lead, trail;
 	protected SequenceNumber	rxw_trail, rxw_trail_init;
 	protected SequenceNumber	commitLead;
-	protected boolean			isConstrained = true;
-	protected boolean			isDefined = false;
-	protected boolean			hasEvent = false;
-	protected boolean			isFecAvailable = false;
-	protected long				transmissionGroupSize;
-	protected long				tgSqnShift;
+	protected boolean		isConstrained = true;
+	protected boolean		isDefined = false;
+	protected boolean		hasEvent = false;
+	protected boolean		isFecAvailable = false;
+	protected long			transmissionGroupSize;
+	protected long			tgSqnShift;
 
-	protected long				minFillTime;
-	protected long				maxFillTime;
-	protected long				minNakTransmitCount;
-	protected long				maxNakTransmitCount;
-	protected long				cumulativeLosses;
-	protected long				bytesDelivered;
-	protected long				messagesDelivered;
+	protected long			minFillTime;
+	protected long			maxFillTime;
+	protected long			minNakTransmitCount;
+	protected long			maxNakTransmitCount;
+	protected long			cumulativeLosses;
+	protected long			bytesDelivered;
+	protected long			messagesDelivered;
 
-	protected int				size;
-	protected int				alloc;
+	protected int			size;
+	protected int			alloc;
 	protected SocketBuffer[]	pdata = null;
 
 	public Queue<SocketBuffer> getNakBackoffQueue() {
@@ -268,9 +268,9 @@ System.out.println ("alloc_sqns:" + alloc_sqns);
 		this.alloc = alloc_sqns;
 
 /* Concurrent to permit modification during iteration without a listIterator. */
-		this.nakBackoffQueue = new ConcurrentLinkedQueue<SocketBuffer> ();
-		this.waitNakConfirmQueue = new ConcurrentLinkedQueue<SocketBuffer> ();
-		this.waitDataQueue = new ConcurrentLinkedQueue<SocketBuffer> ();
+		this.nakBackoffQueue = new ConcurrentLinkedQueue<> ();
+		this.waitNakConfirmQueue = new ConcurrentLinkedQueue<> ();
+		this.waitDataQueue = new ConcurrentLinkedQueue<> ();
 	}
 
 /* Returns:
@@ -1087,6 +1087,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 		return this.cumulativeLosses;
 	}
 
+        @Override
 	public String toString() {
 		return	"{" +
 				  "\"lead\": " + this.lead + "" +

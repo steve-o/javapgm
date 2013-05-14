@@ -4,13 +4,13 @@
 public class OptionLength {
 
 	protected SocketBuffer	_skb = null;
-	protected int			_offset = 0;
+	protected int		_offset = 0;
 
-	private static final int OPT_TYPE_OFFSET			= 0;
-	private static final int OPT_LENGTH_OFFSET			= 1;
-	private static final int OPT_TOTAL_LENGTH_OFFSET	= 2;
+	private static final int OPT_TYPE_OFFSET            = 0;
+	private static final int OPT_LENGTH_OFFSET          = 1;
+	private static final int OPT_TOTAL_LENGTH_OFFSET    = 2;
 
-	private static final int SIZEOF_PGM_OPT_LENGTH		= 4;
+	private static final int SIZEOF_PGM_OPT_LENGTH	= 4;
 
 	public OptionLength (SocketBuffer skb, int offset) {
 		this._skb = skb;

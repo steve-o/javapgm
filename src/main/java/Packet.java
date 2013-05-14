@@ -27,12 +27,12 @@ public class Packet {
 	public static final int PGM_OPT_NETWORK		= 0x02;
 	public static final int PGM_OPT_PRESENT		= 0x01;
 
-	public static final int PGM_SPORT_OFFSET		= 0;
-	public static final int PGM_DPORT_OFFSET		= 2;
-	public static final int PGM_TYPE_OFFSET			= 4;
-	public static final int PGM_OPTIONS_OFFSET		= 5;
-	public static final int PGM_CHECKSUM_OFFSET		= 6;
-	public static final int PGM_GSI_OFFSET			= 8;
+	public static final int PGM_SPORT_OFFSET	= 0;
+	public static final int PGM_DPORT_OFFSET	= 2;
+	public static final int PGM_TYPE_OFFSET		= 4;
+	public static final int PGM_OPTIONS_OFFSET	= 5;
+	public static final int PGM_CHECKSUM_OFFSET	= 6;
+	public static final int PGM_GSI_OFFSET		= 8;
 	public static final int PGM_TSDU_LENGTH_OFFSET	= 14;
 	public static final int PGM_TYPE_DATA_OFFSET	= SIZEOF_PGM_HEADER;
 

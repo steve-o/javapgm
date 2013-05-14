@@ -10,9 +10,9 @@ import java.net.UnknownHostException;
 public class NullNakPacket {
 
 	protected SocketBuffer	_skb = null;
-	protected int			_offset = 0;
+	protected int		_offset = 0;
 
-	private static final int NNAK_SQN_OFFSET			= 0;
+	private static final int NNAK_SQN_OFFSET		= 0;
 	private static final int NNAK_SRC_NLA_AFI_OFFSET	= 4;
 	private static final int NNAK_RESERVED_OFFSET		= 6;
 	private static final int NNAK_SRC_NLA_OFFSET		= 8;
@@ -21,7 +21,7 @@ public class NullNakPacket {
 	private static final int NNAK_GRP_NLA_OFFSET		= 16;
 	private static final int NNAK_OPTIONS_OFFSET		= 20;
 
-	private static final int NNAK6_SQN_OFFSET			= 0;
+	private static final int NNAK6_SQN_OFFSET		= 0;
 	private static final int NNAK6_SRC_NLA_AFI_OFFSET	= 4;
 	private static final int NNAK6_RESERVED_OFFSET		= 6;
 	private static final int NNAK6_SRC_NLA_OFFSET		= 8;
@@ -124,6 +124,7 @@ public class NullNakPacket {
 			return nnak_grp_nla.toString();
 	}
 
+        @Override
 	public String toString() {
 		Header header = this._skb.getHeader();
 		return  "{" +

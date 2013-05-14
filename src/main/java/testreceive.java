@@ -56,8 +56,8 @@ public class testreceive
 	MulticastSocket send_sock = null;
 /* Workaround Java lack of pass-by-reference for source peer. */
 	Peer[] source = new Peer[1];
-	Hashtable<TransportSessionId, Peer> peers = new Hashtable<TransportSessionId, Peer>();
-	LinkedList<Peer> peers_pending = new LinkedList<Peer>();
+	Hashtable<TransportSessionId, Peer> peers = new Hashtable<>();
+	LinkedList<Peer> peers_pending = new LinkedList<>();
 
 	public enum IoStatus {
 		IO_STATUS_ERROR,
@@ -103,7 +103,7 @@ public class testreceive
 			if (keyCount > 0) {
 				selector.selectedKeys().clear();
 
-				final List<SocketBuffer> skbs = new ArrayList<SocketBuffer>();
+				final List<SocketBuffer> skbs = new ArrayList<>();
 				final IoStatus status = receive (skbs);
 				switch (status) {
 				case IO_STATUS_NORMAL:
@@ -532,7 +532,7 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 				else
 				{
 					System.out.println ("Peer expired.");
-					this.peers.remove (peer);
+					this.peers.remove (peer.getTransportSessionId());
 					peer = null;
 				}
 			}
@@ -605,7 +605,7 @@ System.out.println ("Next expiration: RDATA");
 		final boolean isValidNla = peer.hasValidNla();
 
 		{
-			ArrayList<SequenceNumber> nakList = new ArrayList<SequenceNumber>();
+			ArrayList<SequenceNumber> nakList = new ArrayList<>();
 
 /* select NAK generation */
 

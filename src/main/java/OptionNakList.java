@@ -4,12 +4,12 @@
 public class OptionNakList {
 
 	protected SocketBuffer	_skb = null;
-	protected int			_offset = 0;
-	protected int			_count = 0;
+	protected int		_offset = 0;
+	protected int           _count = 0;
 
-	private static final int OPT_TYPE_OFFSET		= 0;
-	private static final int OPT_LENGTH_OFFSET		= 1;
-	private static final int OPT_SQN_OFFSET			= 4;
+	private static final int OPT_TYPE_OFFSET    = 0;
+	private static final int OPT_LENGTH_OFFSET  = 1;
+	private static final int OPT_SQN_OFFSET     = 4;
 
 	private static final int SIZEOF_PGM_OPT_NAK_LIST_HEADER	= 4;
 	private static final int SIZEOF_PGM_SQN			= 4;
