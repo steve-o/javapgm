@@ -1,5 +1,6 @@
 /* Abstract base class for parsing PGM packet formats.
  */
+package hk.miru.javapgm;
 
 public class Packet {
 

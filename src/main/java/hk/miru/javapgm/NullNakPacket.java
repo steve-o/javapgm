@@ -1,6 +1,8 @@
 /* Null-NAK or NNAK packet.  Feedback by PGM infrastructure after
  * suppressing local network NAKs for adaptive parameter calculation.
  */
+package hk.miru.javapgm;
+
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;

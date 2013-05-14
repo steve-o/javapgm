@@ -1,5 +1,6 @@
 /* PGM Option Extension.
  */
+package hk.miru.javapgm;
 
 public class OptionHeader {
 

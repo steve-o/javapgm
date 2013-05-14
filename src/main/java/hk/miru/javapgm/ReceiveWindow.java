@@ -1,5 +1,8 @@
 /* Receive window as a ring buffer.
  */
+package hk.miru.javapgm;
+
+import hk.miru.javapgm.ControlBuffer;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;

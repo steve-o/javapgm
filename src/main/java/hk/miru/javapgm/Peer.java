@@ -1,6 +1,8 @@
 /* A peer in the context of the sock is another party on the network sending PGM
  * packets.
  */
+package hk.miru.javapgm;
+
 import java.net.InetAddress;
 import java.util.List;
 import java.util.Queue;

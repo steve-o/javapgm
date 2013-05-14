@@ -1,6 +1,7 @@
 /* Original data or ODATA packet.  Used for wrapping first tranmission of data
  * on the wire.
  */
+package hk.miru.javapgm;
 
 public class OriginalData {
 

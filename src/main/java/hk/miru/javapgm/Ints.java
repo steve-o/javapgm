@@ -1,5 +1,6 @@
 /*
  */
+package hk.miru.javapgm;
 
 public final class Ints {
 	private Ints() {}

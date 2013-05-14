@@ -1,6 +1,7 @@
 /* Wrapper for Java primitives data type to handle window semantics of
  * comparison and wrapping.
  */
+package hk.miru.javapgm;
 
 //import static Preconditions.checkArgument;
 //import static Preconditions.checkNotNull;

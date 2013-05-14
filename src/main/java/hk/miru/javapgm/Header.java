@@ -1,5 +1,6 @@
 /* PGM packet header.
  */
+package hk.miru.javapgm;
 
 public class Header {
 

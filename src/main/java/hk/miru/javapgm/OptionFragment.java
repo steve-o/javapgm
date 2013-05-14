@@ -1,5 +1,6 @@
 /* PGM Option Fragment Extension.
  */
+package hk.miru.javapgm;
 
 public class OptionFragment {
 

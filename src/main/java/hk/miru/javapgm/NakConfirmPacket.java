@@ -1,6 +1,8 @@
 /* NAK confirm packet or NCF is sent on immediate receipt of a NAK to suppress
  * other peer subscribers from sending their own NAK.
  */
+package hk.miru.javapgm;
+
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;

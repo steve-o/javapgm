@@ -1,6 +1,8 @@
 /* Source path message or SPM packet.  Used for defining and keeping multicast
  * circuit state.
  */
+package hk.miru.javapgm;
+
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;

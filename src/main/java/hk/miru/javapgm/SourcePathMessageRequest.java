@@ -1,5 +1,6 @@
 /* SPM-request or SPMR packet.  Used for early access to source NLA.
  */
+package hk.miru.javapgm;
 
 public class SourcePathMessageRequest {
 

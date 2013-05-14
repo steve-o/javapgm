@@ -1,6 +1,8 @@
 /* Negative acknowledgement or NAK packet.  Sent by receiver to source to re-
  * request delivery of a lost or corrupt packet.
  */
+package hk.miru.javapgm;
+
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;

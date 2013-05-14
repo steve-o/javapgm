@@ -1,5 +1,7 @@
 /* Checksum computation for PGM packets using one's complement arithmetic.
  */
+package hk.miru.javapgm;
+
 @SuppressWarnings("PointlessBitwiseExpression")
 public class PgmChecksum {
 

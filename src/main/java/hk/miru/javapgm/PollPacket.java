@@ -1,5 +1,7 @@
 /* Poll packet for starting receiver poll rounds.
  */
+package hk.miru.javapgm;
+
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;

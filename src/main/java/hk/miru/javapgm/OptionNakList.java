@@ -1,5 +1,6 @@
 /* PGM Option NAK List Extension.
  */
+package hk.miru.javapgm;
 
 public class OptionNakList {
 

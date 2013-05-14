@@ -1,5 +1,6 @@
 /*
  */
+package hk.miru.javapgm;
 
 public final class UnsignedInts {
 	static final long INT_MASK = 0xffffffffL;

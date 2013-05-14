@@ -1,5 +1,8 @@
 /* Primitive data buffer for PGM packets.
  */
+package hk.miru.javapgm;
+
+import hk.miru.javapgm.ControlBuffer;
 import java.net.Socket;
 
 import javax.annotation.Nullable;

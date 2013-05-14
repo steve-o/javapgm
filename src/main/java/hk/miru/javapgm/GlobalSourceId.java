@@ -1,5 +1,7 @@
 /* Unique global source identifier.
  */
+package hk.miru.javapgm;
+
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;

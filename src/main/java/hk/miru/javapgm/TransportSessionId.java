@@ -1,5 +1,7 @@
 /* Unique identifier for each PGM transport session.
  */
+package hk.miru.javapgm;
+
 public class TransportSessionId
 {
 	private GlobalSourceId gsi = null;

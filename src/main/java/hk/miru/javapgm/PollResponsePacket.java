@@ -1,5 +1,6 @@
 /* Poll-response or POLR packet.
  */
+package hk.miru.javapgm;
 
 public class PollResponsePacket {
 

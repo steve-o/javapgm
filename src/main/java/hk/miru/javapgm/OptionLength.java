@@ -1,5 +1,6 @@
 /* PGM Option Length Extension.
  */
+package hk.miru.javapgm;
 
 public class OptionLength {
 
