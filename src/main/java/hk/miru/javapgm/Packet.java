@@ -4,8 +4,13 @@ package hk.miru.javapgm;
 
 import static hk.miru.javapgm.Preconditions.checkNotNull;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class Packet {
 
+        private static Logger LOG = LogManager.getLogger (Packet.class.getName());
+    
 	public static final int AFI_IP	= 1;
 	public static final int AFI_IP6	= 2;
 
@@ -42,7 +47,7 @@ public class Packet {
 	public static boolean parseUdpEncapsulated (SocketBuffer skb) {
                 checkNotNull (skb);
 		if (skb.getRawBytes().length < SIZEOF_PGM_HEADER) {
-			System.out.println ("UDP payload too small for PGM packet at " + skb.getRawBytes().length + " bytes, expecting at least " + SIZEOF_PGM_HEADER + " bytes.");
+                        LOG.debug ("UDP payload too small for PGM packet at {} bytes, expecting at least {} bytes.", skb.getRawBytes().length, SIZEOF_PGM_HEADER);
 			return false;
 		}
 
@@ -57,19 +62,19 @@ public class Packet {
 			skb.getHeader().clearChecksum();
 			final int calculated_checksum = doChecksum (skb.getRawBytes());
 			if (source_checksum != calculated_checksum) {
-				System.out.println ("PGM packet checksum mismatch, reported 0x" + String.format ("%x", source_checksum) + " whilst calculated 0x" + String.format ("%x", calculated_checksum) + ".");
+                                LOG.debug ("PGM packet checksum mismatch, reported {} whilst calculated {}.", String.format ("%#x", source_checksum), String.format ("%#x", calculated_checksum));
 				return false;
 			}
 		} else {
 			if (PGM_ODATA == skb.getHeader().getType()) {
-				System.out.println ("PGM checksum missing whilst mandatory for ODATA packets.");
+                                LOG.debug ("PGM checksum missing whilst mandatory for ODATA packets.");
 				return false;
 			}
 			if (PGM_RDATA == skb.getHeader().getType()) {
-				System.out.println ("PGM checksum missing whilst mandatory for RDATA packets.");
+                                LOG.debug ("PGM checksum missing whilst mandatory for RDATA packets.");
 				return false;
 			}
-			System.out.println ("No PGM checksum.");
+                        LOG.debug ("No PGM checksum.");
 		}
 
 		skb.setTransportSessionId (new TransportSessionId (skb.getHeader().getGlobalSourceId(), skb.getHeader().getSourcePort()));

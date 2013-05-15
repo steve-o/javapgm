@@ -4,12 +4,13 @@
 package hk.miru.javapgm;
 
 import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 import java.net.InetAddress;
 import java.util.List;
 import java.util.Queue;
 
 public class Peer {
-
+       
 	private TransportSessionId tsi = null;
 	private InetAddress groupPath = null;
 	private InetAddress nla = null, local_nla = null;

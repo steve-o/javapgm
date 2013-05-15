@@ -12,6 +12,7 @@ import hk.miru.javapgm.Peer;
 import hk.miru.javapgm.OriginalData;
 import hk.miru.javapgm.ReceiveWindow;
 import hk.miru.javapgm.SourcePathMessage;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.Inet4Address;
@@ -36,11 +37,16 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Queue;
 
-public class testreceive
-{
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+public class testreceive {
+        private static Logger LOG = LogManager.getLogger (testreceive.class.getName()); 
+    
 /* Windows does not have convenient adapter names. */
+	String interfaceName = "10.67.4.75";
 //	String interfaceName = "10.0.9.30";
-	String interfaceName = "eth0";
+//	String interfaceName = "eth0";
 	String networkGroup = "239.192.0.1";
 	int udpEncapsulationPort = 3056;
 	int dataSourcePort = 0;
@@ -102,7 +108,7 @@ public class testreceive
 		Runtime.getRuntime().addShutdownHook (new Thread() {
 			@Override
 			public void run() {
-				System.out.println ("fin.");
+				LOG.info ("fin.");
 			}
 		});
 
@@ -121,16 +127,16 @@ public class testreceive
 					on_data (skbs);
 					break;
 				case IO_STATUS_TIMER_PENDING:
-					System.out.println ("timer pending ...");
+					LOG.info ("timer pending ...");
 					break;
 				case IO_STATUS_RATE_LIMITED:
-					System.out.println ("rate limited ...");
+					LOG.info ("rate limited ...");
 					break;
 				case IO_STATUS_WOULD_BLOCK:
-					System.out.println ("would block.");
+					LOG.info ("would block.");
 					break;
 				default:
-					System.out.println ("unhandled return state: " + status);
+					LOG.error ("unhandled return state: ", status);
 					break;
 				}
 			}
@@ -138,11 +144,11 @@ public class testreceive
 	}
 
 	private void on_data (List<SocketBuffer> skbs) {
-		System.out.println ("Received " + skbs.size() + " SKBs");
+		LOG.info ("Received {} SKBs", skbs.size());
 		int i = 1;
 		for (SocketBuffer skb : skbs) {
-			System.out.println ("#" + (i++) + " from " + skb.getTransportSessionId() + ": " +
-				"\"" + new String (skb.getRawBytes(), skb.getDataOffset(), skb.getLength()) + "\"");
+			LOG.info ("#{} from {}: \"{}\"",
+                                   i++, skb.getTransportSessionId(), new String (skb.getRawBytes(), skb.getDataOffset(), skb.getLength()));
 		}
 	}
 
@@ -183,7 +189,7 @@ public class testreceive
 				this.rx_buffer.setTimestamp (System.currentTimeMillis());
 /* Rx testing */
 if (Math.random() < 0.25) {
-	System.out.println ("Dropping packet.");
+	LOG.info ("Dropping packet.");
 	continue;
 }
 				if (!Packet.parseUdpEncapsulated (this.rx_buffer))
@@ -193,7 +199,7 @@ if (Math.random() < 0.25) {
 					break;
 /* check whether this source has waiting data */
 				if (null != this.source[0] && this.source[0].hasPending()) {
-					System.out.println ("New pending data.");
+					LOG.info ("New pending data.");
 					this.peers_pending.addFirst (this.source[0]);
 					this.source[0].setPendingLinkData();
 				}
@@ -248,13 +254,13 @@ if (Math.random() < 0.25) {
 		)
 	{
 		if (!this.canReceiveData) {
-			System.out.println ("Discarded packet for muted receiver.");
+			LOG.info ("Discarded packet for muted receiver.");
 			return false;
 		}
 
 		if (skb.getHeader().getDestinationPort() != this.dataDestinationPort) {
-			System.out.println ("Discarded packet on data-destination port mismatch.");
-			System.out.println ("Data-destination port: " + skb.getHeader().getDestinationPort());
+			LOG.info ("Discarded packet on data-destination port mismatch.");
+			LOG.info ("Data-destination port: {}", skb.getHeader().getDestinationPort());
 			return false;
 		}
 
@@ -271,7 +277,7 @@ if (Math.random() < 0.25) {
 
 		switch (skb.getHeader().getType()) {
 		case Packet.PGM_RDATA:
-			System.out.println ("********* REPAIR DATA ***************");
+			LOG.info ("********* REPAIR DATA ***************");
 		case Packet.PGM_ODATA:
 			if (!this.onData (source[0], skb))
 				return false;
@@ -290,7 +296,7 @@ if (Math.random() < 0.25) {
 			break;
 
 		default:
-			System.out.println ("Discarded unsupported PGM type packet.");
+			LOG.info ("Discarded unsupported PGM type packet.");
 			return false;
 		}
 
@@ -316,7 +322,7 @@ if (Math.random() < 0.25) {
 		else if (skb.getHeader().isPeer())
 			return this.onPeer (skb, sourceAddress, destinationAddress);
 
-		System.out.println ("Discarded unknown PGM packet.");
+		LOG.info ("Discarded unknown PGM packet.");
 		return false;
 	}
 
@@ -328,7 +334,7 @@ if (Math.random() < 0.25) {
 		int msgCount = 0;
 		boolean flushNaks = false;
 
-		System.out.println ("onData");
+		LOG.info ("onData");
 
 		final long nakBackoffExpiration = skb.getTimestamp() + calculateNakRandomBackoffInterval();
 
@@ -343,7 +349,7 @@ if (Math.random() < 0.25) {
 			Packet.parseOptionExtensions (skb, skb.getDataOffset());
 
 		final ReceiveWindow.Returns addStatus = source.add (skb, skb.getTimestamp(), nakBackoffExpiration);
-System.out.println ("ReceiveWindow.add returned " + addStatus);
+LOG.info ("ReceiveWindow.add returned " + addStatus);
 
 		switch (addStatus) {
 		case RXW_MISSING:
@@ -380,7 +386,7 @@ System.out.println ("ReceiveWindow.add returned " + addStatus);
 		SocketBuffer skb
 		)
 	{
-		System.out.println ("onSourcePathMessage");
+		LOG.info ("onSourcePathMessage");
 
 		SourcePathMessage spm = new SourcePathMessage (skb, skb.getDataOffset());
 
@@ -416,7 +422,7 @@ System.out.println ("ReceiveWindow.add returned " + addStatus);
 		}
 		else
 		{	/* does not advance SPM sequence number */
-			System.out.println ("Discarded duplicate SPM.");
+			LOG.info ("Discarded duplicate SPM.");
 			return false;
 		}
 
@@ -432,7 +438,7 @@ System.out.println ("ReceiveWindow.add returned " + addStatus);
 			List<SocketBuffer> skbs
 			)
 	{
-System.out.println ("flushPeersPending");
+LOG.info ("flushPeersPending");
 		int bytes_read = 0;
 		int data_read = 0;
 		ListIterator<Peer> it = this.peers_pending.listIterator();
@@ -465,7 +471,7 @@ System.out.println ("flushPeersPending");
 	{
 		final long now = System.currentTimeMillis();
 		final boolean hasExpired = now >= this.nextPoll;
-System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
+LOG.info ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
 		return hasExpired;
 	}
 
@@ -474,7 +480,7 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 		final long now = System.currentTimeMillis();
 		long nextExpiration = 0;
 
-		System.out.println ("timerDispatch");
+		LOG.info ("timerDispatch");
 
 		if (true) {
 			if (!checkPeerState (now))
@@ -492,7 +498,7 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 
 	private boolean checkPeerState (long now)
 	{
-		System.out.println ("checkPeerState");
+		LOG.info ("checkPeerState");
 
 		if (this.peers.isEmpty())
 			return true;
@@ -532,17 +538,17 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 			{
 				if (peer.hasPendingLinkData())
 				{
-					System.out.println ("Peer expiration postponed due to committing data.");
+					LOG.info ("Peer expiration postponed due to committing data.");
 					peer.setExpiration (peer.getExpiration() + this.peerExpiration);
 				}
 				else if (peer.hasCommitData())
 				{
-					System.out.println ("Peer expiration postoned due to comitted data.");
+					LOG.info ("Peer expiration postoned due to comitted data.");
 					peer.setExpiration (peer.getExpiration() + this.peerExpiration);
 				}
 				else
 				{
-					System.out.println ("Peer expired.");
+					LOG.info ("Peer expired.");
 					this.peers.remove (peer.getTransportSessionId());
 					peer = null;
 				}
@@ -552,7 +558,7 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 /* check for waiting contiguous packets */
 		if (!this.peers_pending.isEmpty() && !this.hasPendingRead)
 		{
-			System.out.println ("Signal receiver thread.");
+			LOG.info ("Signal receiver thread.");
 			this.hasPendingRead = true;
 		}
 
@@ -561,7 +567,7 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 
 	private long minReceiverExpiration (long expiration)
 	{
-		System.out.println ("minReceiverExpiration");
+		LOG.info ("minReceiverExpiration");
 
 		if (this.peers.isEmpty())
 			return expiration;
@@ -572,28 +578,28 @@ System.out.println ("now: " + now + " next: " + ((this.nextPoll - now) / 1000));
 			if (peer.hasSpmrExpiration() &&
 			    expiration >= peer.getSpmrExpiration())
 			{
-System.out.println ("Next expiration: SPMR");
+LOG.info ("Next expiration: SPMR");
 				expiration = peer.getSpmrExpiration();
 			}
 
 			if (!peer.getNakBackoffQueue().isEmpty() &&
 			    expiration >= peer.firstNakBackoffExpiration())
 			{
-System.out.println ("Next expiration: NAK backoff");
+LOG.info ("Next expiration: NAK backoff");
 				expiration = peer.firstNakBackoffExpiration();
 			}
 
 			if (!peer.getWaitNakConfirmQueue().isEmpty() &&
 			    expiration >= peer.firstNakRepeatExpiration())
 			{
-System.out.println ("Next expiration: NAK repeat");
+LOG.info ("Next expiration: NAK repeat");
 				expiration = peer.firstNakRepeatExpiration();
 			}
 
 			if (!peer.getWaitDataQueue().isEmpty() &&
 			    expiration >= peer.firstRepairDataExpiration())
 			{
-System.out.println ("Next expiration: RDATA");
+LOG.info ("Next expiration: RDATA");
 				expiration = peer.firstRepairDataExpiration();
 			}
 		}
@@ -605,11 +611,11 @@ System.out.println ("Next expiration: RDATA");
 	{
 		int droppedInvalid = 0;
 
-		System.out.println ("nakBackoffState");
+		LOG.info ("nakBackoffState");
 
 		Queue<SocketBuffer> nakBackoffQueue = peer.getNakBackoffQueue();
 		if (nakBackoffQueue.isEmpty()) {
-			System.out.println ("Backoff queue is empty in nak_rb_state.");
+			LOG.info ("Backoff queue is empty in nak_rb_state.");
 			return true;
 		}
 
@@ -620,7 +626,7 @@ System.out.println ("Next expiration: RDATA");
 
 /* select NAK generation */
 
-System.out.println ("nakBackoffQueue contains " + nakBackoffQueue.size() + " SKBs.");
+LOG.info ("nakBackoffQueue contains {} SKBs.", nakBackoffQueue.size());
 			for (Iterator<SocketBuffer> it = nakBackoffQueue.iterator(); it.hasNext();)
 			{
 				SocketBuffer skb = it.next();
@@ -639,7 +645,7 @@ System.out.println ("nakBackoffQueue contains " + nakBackoffQueue.size() + " SKB
 					ReceiveWindow.incrementNakTransmitCount (skb);
 
 					ReceiveWindow.setNakRepeatExpiration (skb, now + this.nak_rpt_ivl);
-					System.out.println ("nak_rpt_expiry in " + ((ReceiveWindow.getNakRepeatExpiration (skb) - now) / 1000) + " seconds.");
+					LOG.info ("nak_rpt_expiry in {} seconds.", ((ReceiveWindow.getNakRepeatExpiration (skb) - now) / 1000));
 					if (this.nextPoll > ReceiveWindow.getNakRepeatExpiration (skb))
 						this.nextPoll = ReceiveWindow.getNakRepeatExpiration (skb);
 
@@ -651,7 +657,7 @@ System.out.println ("nakBackoffQueue contains " + nakBackoffQueue.size() + " SKB
 				}
 				else
 				{	/* packet expires some time later */
-System.out.println ("SKB expiration now + " + (ReceiveWindow.getNakBackoffExpiration (skb) - now));
+LOG.info ("SKB expiration now + {}", (ReceiveWindow.getNakBackoffExpiration (skb) - now));
 					break;
 				}
 			}
@@ -666,7 +672,7 @@ System.out.println ("SKB expiration now + " + (ReceiveWindow.getNakBackoffExpira
 
 		if (droppedInvalid > 0)
 		{
-			System.out.println ("Dropped " + droppedInvalid + " messages due to invalid NLA.");
+			LOG.info ("Dropped {} messages due to invalid NLA.", droppedInvalid);
 
 			if (peer.hasDataLoss() &&
 			    !peer.hasPendingLinkData())
@@ -679,9 +685,9 @@ System.out.println ("SKB expiration now + " + (ReceiveWindow.getNakBackoffExpira
 
 		if (!nakBackoffQueue.isEmpty()) {
 			final long secs = (peer.firstNakBackoffExpiration() - now) / 1000;
-			System.out.println ("Next expiration set in " + secs + " seconds.");
+			LOG.info ("Next expiration set in {} seconds.", secs);
 		} else {
-			System.out.println ("NAK backoff queue empty.");
+			LOG.info ("NAK backoff queue empty.");
 		}
 		return true;
 	}
@@ -691,13 +697,13 @@ System.out.println ("SKB expiration now + " + (ReceiveWindow.getNakBackoffExpira
 		int droppedInvalid = 0;
 		int dropped = 0;
 
-		System.out.println ("NakRepeatState");
+		LOG.info ("NakRepeatState");
 
 		Queue<SocketBuffer> waitNakConfirmQueue = peer.getWaitNakConfirmQueue();
 
 		final boolean isValidNla = peer.hasValidNla();
 
-System.out.println ("waitNcfQueue contains " + waitNakConfirmQueue.size() + " SKBs.");
+LOG.info ("waitNcfQueue contains {} SKBs.", waitNakConfirmQueue.size());
 		for (Iterator<SocketBuffer> it = waitNakConfirmQueue.iterator(); it.hasNext();)
 		{
 			SocketBuffer skb = it.next();
@@ -724,22 +730,26 @@ System.out.println ("waitNcfQueue contains " + waitNakConfirmQueue.size() + " SK
 /* retry */
 					ReceiveWindow.setNakBackoffExpiration (skb, now + calculateNakRandomBackoffInterval());
 					peer.setBackoffState (skb);
-					System.out.println ("NCF retry #" + skb.getSequenceNumber() + " attempt " + ReceiveWindow.getNcfRetryCount (skb) + "/" + this.nak_ncf_retries + ".");
+					LOG.info ("NCF retry #{} attempt {}/{}.",
+                                                   skb.getSequenceNumber(),
+                                                   ReceiveWindow.getNcfRetryCount (skb),
+                                                   this.nak_ncf_retries);
 				}
 			}
 			else
 			{
 /* packet expires some time later */
 				final long seconds = (ReceiveWindow.getNakRepeatExpiration (skb) - now) / 1000;
-				System.out.println ("NCF retry #" + skb.getSequenceNumber() + " is delayed " + seconds + " seconds.");
+				LOG.info ("NCF retry #{} is delayed {} seconds.",
+                                           skb.getSequenceNumber(), seconds);
 			}
 		}
 
 		if (droppedInvalid > 0)
-			System.out.println ("Dropped " + droppedInvalid + " message due to invalid NLA.");
+			LOG.info ("Dropped {} message due to invalid NLA.", droppedInvalid);
 
 		if (dropped > 0)
-			System.out.println ("Dropped " + dropped + " messages due to NCF cancellation.");
+			LOG.info ("Dropped messages due to NCF cancellation.", dropped);
 
 		if (peer.hasDataLoss() &&
 		    !peer.hasPendingLinkData())
@@ -753,15 +763,15 @@ System.out.println ("waitNcfQueue contains " + waitNakConfirmQueue.size() + " SK
 		{
 			if (peer.firstNakRepeatExpiration() > now) {
 				final long seconds = (peer.firstNakRepeatExpiration() - now) / 1000;
-				System.out.println ("Next expiration set in " + seconds + " seconds.");
+				LOG.info ("Next expiration set in {} seconds.", seconds);
 			} else {
 				final long seconds = (now - peer.firstNakRepeatExpiration()) / 1000;
-				System.out.println ("Next expiration set in -" + seconds + " seconds.");
+				LOG.info ("Next expiration set in -{} seconds.", seconds);
 			}
 		}
 		else
 		{
-			System.out.println ("Wait NCF queue empty.");
+			LOG.info ("Wait NCF queue empty.");
 		}
 	}
 
@@ -770,13 +780,13 @@ System.out.println ("waitNcfQueue contains " + waitNakConfirmQueue.size() + " SK
 		int droppedInvalid = 0;
 		int dropped = 0;
 
-		System.out.println ("nakRepairDataState");
+		LOG.info ("nakRepairDataState");
 
 		Queue<SocketBuffer> waitDataQueue = peer.getWaitDataQueue();
 
 		final boolean isValidNla = peer.hasValidNla();
 
-System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.");
+LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		for (Iterator<SocketBuffer> it = waitDataQueue.iterator(); it.hasNext();)
 		{
 			SocketBuffer skb = it.next();
@@ -803,7 +813,10 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 /* retry */
 					ReceiveWindow.setNakBackoffExpiration (skb, now + calculateNakRandomBackoffInterval());
 					peer.setBackoffState (skb);
-					System.out.println ("Data retry #" + skb.getSequenceNumber() + " attempt " + ReceiveWindow.getDataRetryCount (skb) + "/" + this.nak_data_retries + ".");
+					LOG.info ("Data retry #{} attempt {}/{}.",
+                                                   skb.getSequenceNumber(),
+                                                   ReceiveWindow.getDataRetryCount (skb),
+                                                   this.nak_data_retries);
 				}
 			}
 			else
@@ -814,10 +827,10 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 		}
 
 		if (droppedInvalid > 0)
-			System.out.println ("Dropped " + droppedInvalid + " message due to invalid NLA.");
+			LOG.info ("Dropped {} message due to invalid NLA.", droppedInvalid);
 
 		if (dropped > 0)
-			System.out.println ("Dropped " + dropped + " messages due to data cancellation.");
+			LOG.info ("Dropped {} messages due to data cancellation.", dropped);
 
 		if (peer.hasDataLoss() &&
 		    !peer.hasPendingLinkData())
@@ -829,9 +842,9 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 
 		if (!waitDataQueue.isEmpty()) {
 			final long seconds = (peer.firstRepairDataExpiration() - now) / 1000;
-			System.out.println ("Next expiration set in " + seconds + " seconds.");
+			LOG.info ("Next expiration set in {} seconds.", seconds);
 		} else {
-			System.out.println ("Wait data queue empty.");
+			LOG.info ("Wait data queue empty.");
 		}
 	}
 
@@ -844,7 +857,7 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 
 	private boolean sendSpmr (Peer peer)
 	{
-		System.out.println ("sendSpmr");
+		LOG.info ("sendSpmr");
 
 		SocketBuffer skb = SourcePathMessageRequest.create();
 		Header header = skb.getHeader();
@@ -863,14 +876,14 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 			this.send_sock.send (pkt);
 			return true;
 		} catch (java.io.IOException e) {
-			System.out.println (e.toString());
+			LOG.error (e.toString());
 			return false;
 		}
 	}
 
 	private boolean sendNak (Peer peer, SequenceNumber sequence)
 	{
-		System.out.println ("sendNak");
+		LOG.info ("sendNak");
 
 		SocketBuffer skb = Nak.create (peer.getNetworkLayerAddress(), this.group);
 		Header header = skb.getHeader();
@@ -901,18 +914,18 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 							 this.udpEncapsulationPort);
 		try {
 			this.send_sock.send (pkt);
-			System.out.println ("Sent NAK to " + peer.getNetworkLayerAddress());
-			System.out.println ("NAK: " + skb);
+			LOG.info ("Sent NAK to {}", peer.getNetworkLayerAddress());
+			LOG.info ("NAK: {}", skb);
 			return true;
 		} catch (java.io.IOException e) {
-			System.out.println (e.toString());
+			LOG.error (e.toString());
 			return false;
 		}	
 	}
 
 	private boolean sendNakList (Peer peer, ArrayList<SequenceNumber> sqn_list)
 	{
-		System.out.println ("sendNakList");
+		LOG.info ("sendNakList");
 
 		SocketBuffer skb = Nak.create (peer.getNetworkLayerAddress(), this.group, sqn_list.size());
 		Header header = skb.getHeader();
@@ -945,17 +958,17 @@ System.out.println ("waitDataQueue contains " + waitDataQueue.size() + " SKBs.")
 							 this.udpEncapsulationPort);
 		try {
 			this.send_sock.send (pkt);
-			System.out.println ("Sent NAK to " + peer.getNetworkLayerAddress());
+			LOG.info ("Sent NAK to {}", peer.getNetworkLayerAddress());
 			return true;
 		} catch (java.io.IOException e) {
-			System.out.println (e.toString());
+			LOG.error (e.toString());
 			return false;
 		}
 	}
 
 	private void cancel (Peer peer, SocketBuffer skb, long now)
 	{
-		System.out.println ("Lost data #" + skb.getSequenceNumber() + " due to cancellation.");
+		LOG.info ("Lost data #{} due to cancellation.", skb.getSequenceNumber());
 
 		peer.markLost (skb.getSequenceNumber());
 

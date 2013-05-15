@@ -9,7 +9,12 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class ReceiveWindow {
+    
+        private static Logger LOG = LogManager.getLogger (ReceiveWindow.class.getName());
 
 	public enum PacketState {
 		PKT_ERROR_STATE,
@@ -257,7 +262,7 @@ public class ReceiveWindow {
 		this.tsi = tsi;
 		this.max_tpdu = tpdu_size;
 
-System.out.println ("alloc_sqns:" + alloc_sqns);
+LOG.debug ("alloc_sqns: {}", alloc_sqns);
 
 /* empty state:
  *
@@ -294,44 +299,45 @@ System.out.println ("alloc_sqns:" + alloc_sqns);
 	{
                 checkNotNull (skb);
 		Returns status;
-		System.out.println ("add ( " +
-					"\"skb\": " + skb + "" +
-					" )");
+                LOG.debug ("add (\"skb\": {})", skb);
 
 		skb.setControlBuffer (new State ());
 		skb.setSequenceNumber (skb.getAsOriginalData().getDataSequenceNumber());
 
 		if (skb.getLength() != skb.getHeader().getTsduLength()) {
-			System.out.println ("SKB length does not match TSDU length.");
+                        LOG.debug ("SKB length does not match TSDU length.");
 			return Returns.RXW_MALFORMED;
 		}
 
 /* protocol sanity check: valid trail pointer wrt. sequence */
 		if (skb.getSequenceNumber().minus (skb.getAsOriginalData().getDataTrail()).longValue() >= ((UINT32_MAX/2)-1)) {
-			System.out.println ("SKB sequence " + skb.getSequenceNumber() + " outside window horizon by " + skb.getSequenceNumber().minus (skb.getAsOriginalData().getDataTrail()) + " wrt trail " + skb.getAsOriginalData().getDataTrail());
+                        LOG.debug ("SKB sequence {} outside window horizon by {} wrt trail {}",
+                                    skb.getSequenceNumber(),
+                                    skb.getSequenceNumber().minus (skb.getAsOriginalData().getDataTrail()),
+                                    skb.getAsOriginalData().getDataTrail());
 			return Returns.RXW_BOUNDS;
 		}
 
 /* drop parity packets */
 		if (skb.getHeader().isParity()) {
-			System.out.println ("Unsupported parity packet");
+			LOG.debug ("Unsupported parity packet");
 			return Returns.RXW_MALFORMED;
 		}
 
 		if (skb.isFragment()) {
 			if (skb.getFragmentOption().getApduLength() == skb.getLength()) {
-				System.out.println ("Fragmented message contains only one fragment.");
+				LOG.debug ("Fragmented message contains only one fragment.");
 			}
 			if (skb.getFragmentOption().getApduLength() < skb.getLength()) {
-				System.out.println ("SKB length greated than APDU length.");
+				LOG.debug ("SKB length greated than APDU length.");
 				return Returns.RXW_MALFORMED;
 			}
 			if (skb.getFragmentOption().getFirstSequenceNumber().gt (skb.getSequenceNumber())) {
-				System.out.println ("Fragment sequence number less than first message fragment.");
+				LOG.debug ("Fragment sequence number less than first message fragment.");
 				return Returns.RXW_MALFORMED;
 			}
 			if (skb.getFragmentOption().getApduLength() > MAX_APDU) {
-				System.out.println ("APDU greater than supported length.");
+				LOG.debug ("APDU greater than supported length.");
 				return Returns.RXW_MALFORMED;
 			}
 		}
@@ -344,15 +350,16 @@ System.out.println ("alloc_sqns:" + alloc_sqns);
 
 		if (skb.getSequenceNumber().lt (this.commitLead)) {
 			if (skb.getSequenceNumber().gte (this.trail)) {
-				System.out.println ("Duplicate packet from window");
+				LOG.debug ("Duplicate packet from window");
 				return Returns.RXW_DUPLICATE;
 			} else {
-				System.out.println ("Duplicate packet before window");
+				LOG.debug ("Duplicate packet before window");
 				return Returns.RXW_BOUNDS;
 			}
 		}
 
-System.out.println ("SKB:" + skb.getSequenceNumber() + " trail:" + this.trail + " commit:" + this.commitLead + " lead:" + this.lead + " (RXW_TRAIL:" + this.rxw_trail + ")");
+LOG.debug ("SKB:{} trail:{} commit:{} lead:{} (RXW_TRAIL:{})",
+            skb.getSequenceNumber(), this.trail, this.commitLead, this.lead, this.rxw_trail);
 		if (skb.getSequenceNumber().lte (this.lead)) {
 			this.hasEvent = true;
 			return insert (skb);
@@ -376,7 +383,7 @@ System.out.println ("SKB:" + skb.getSequenceNumber() + " trail:" + this.trail + 
 	private void define (SequenceNumber lead)
 	{
                 checkNotNull (lead);
-System.out.println ("defining window");
+LOG.debug ("defining window");
 		this.lead = lead;
 		this.trail = this.lead.plus (1);
 		this.rxw_trail_init = this.trail;
@@ -389,7 +396,7 @@ System.out.println ("defining window");
 	{
                 checkNotNull (txw_lead);
                 checkNotNull (txw_trail);
-		System.out.println ("update");
+		LOG.debug ("update");
 		if (!this.isDefined) {
 			define (txw_trail);
 			return 0;
@@ -402,7 +409,7 @@ System.out.println ("defining window");
 	private void updateTrail (SequenceNumber txw_trail)
 	{
                 checkNotNull (txw_trail);
-System.out.println ("updating trail");
+LOG.debug ("updating trail");
 /* advertised trail is less than the current value */
 		if (txw_trail.lte (this.rxw_trail))
 			return;
@@ -439,7 +446,7 @@ System.out.println ("updating trail");
 		     this.rxw_trail.gt (sequence) && this.lead.gte (sequence);
 		     sequence = sequence.plus (1))
 		{
-System.out.println ("Purge #" + sequence);
+LOG.debug ("Purge #{}", sequence);
 			SocketBuffer skb = peek (sequence);
 			State state = (State)skb.getControlBuffer();
 			switch (state.pktState) {
@@ -483,7 +490,7 @@ System.out.println ("Purge #" + sequence);
 		this.pdata[index] = skb;
 
 		setPacketState (skb, PacketState.PKT_BACK_OFF_STATE);
-System.out.println ("Placeholder #" + this.lead + " @" + index);
+LOG.debug ("Placeholder #{} pdata[{}]", this.lead, index);
 	}
 
 /* Returns:
@@ -500,7 +507,7 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
 			return Returns.RXW_BOUNDS;
 		}
 		if (isFull()) {
-			System.out.println ("Receive window full on placeholder sequence.");
+			LOG.debug ("Receive window full on placeholder sequence.");
 			removeTrail();
 		}
 /* if packet is non-contiguous to current leading edge add place holders
@@ -509,7 +516,7 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
 		while (!this.lead.plus (1).equals (sequence)) {
 			addPlaceholder (now, nak_rb_expiry);
 			if (isFull()) {
-				System.out.println ("Receive window full on placeholder sequence.");
+				LOG.debug ("Receive window full on placeholder sequence.");
 				removeTrail();
 			}
 		}
@@ -544,7 +551,7 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
 		{
 /* slow consumer or fast producer */
 			if (isFull()) {
-				System.out.println ("Receive window full on window lead advancement.");
+				LOG.debug ("Receive window full on window lead advancement.");
 				removeTrail();
 			}
 			addPlaceholder (now, nak_rb_expiry);
@@ -616,12 +623,12 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
 	private Returns insert (SocketBuffer skb)
 	{
                 checkNotNull (skb);
-System.out.println ("insert");
+LOG.debug ("insert");
 		SocketBuffer placeholder = null;
 		State state = null;
 
 		if (isInvalidVarPktLen (skb) || isInvalidPayloadOption (skb)) {
-			System.out.println ("Invalid packet");
+			LOG.debug ("Invalid packet");
 			return Returns.RXW_MALFORMED;
 		}
 
@@ -680,18 +687,18 @@ System.out.println ("insert");
 	private Returns append (SocketBuffer skb, long now)
 	{
                 checkNotNull (skb);
-System.out.println ("append");
+LOG.debug ("append");
 		if (isInvalidVarPktLen (skb) || isInvalidPayloadOption (skb)) {
-			System.out.println ("Invalid packet");
+			LOG.debug ("Invalid packet");
 			return Returns.RXW_MALFORMED;
 		}
 
 		if (isFull()) {
 			if (isCommitEmpty()) {
-				System.out.println ("Receive window full on new data, pulling trail.");
+				LOG.debug ("Receive window full on new data, pulling trail.");
 				removeTrail();
 			} else {
-				System.out.println ("Receive window full with commit data.");
+				LOG.debug ("Receive window full with commit data.");
 				return Returns.RXW_BOUNDS;
 			}
 		}
@@ -711,7 +718,7 @@ System.out.println ("append");
 			this.pdata[index] = skb;
 
 			setPacketState (skb, PacketState.PKT_LOST_DATA_STATE);
-			System.out.println ("APDU already declared lost, ignoring TPDU.");
+			LOG.debug ("APDU already declared lost, ignoring TPDU.");
 			return Returns.RXW_BOUNDS;
 		}
 
@@ -760,11 +767,11 @@ System.out.println ("append");
  */
 	public int read (List<SocketBuffer> skbs)
 	{
-System.out.println ("read");
+LOG.debug ("read");
 		int bytes_read = -1;
 		if (isIncomingEmpty())
 			return bytes_read;
-System.out.println ("read #" + this.commitLead);
+LOG.debug ("read #{}", this.commitLead);
 		SocketBuffer skb = peek (this.commitLead);
 		State state = (State)skb.getControlBuffer();
 		switch (state.pktState) {
@@ -774,10 +781,10 @@ System.out.println ("read #" + this.commitLead);
 		case PKT_LOST_DATA_STATE:
 /* do not purge in situ sequence */
 			if (isCommitEmpty()) {
-				System.out.println ("Removing lost trail from window");
+				LOG.debug ("Removing lost trail from window");
 				removeTrail();
 			} else {
-				System.out.println ("Locking trail at commit window");
+				LOG.debug ("Locking trail at commit window");
 			}
 /* fall through */
 		case PKT_BACK_OFF_STATE:
@@ -804,9 +811,9 @@ System.out.println ("read #" + this.commitLead);
  */
 	private int removeTrail()
 	{
-System.out.println ("removeTrail");
+LOG.debug ("removeTrail");
 		SocketBuffer skb = peek (this.trail);
-System.out.println ("trail " + this.trail + " = " + skb);
+LOG.debug ("trail {} = {}", this.trail, skb);
 		clearPacketState (skb);
 		this.size -= skb.getLength();
 /* remove reference to skb */
@@ -817,7 +824,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 /* data-loss */
 			this.commitLead = this.commitLead.plus (1);
 			this.cumulativeLosses++;
-			System.out.println ("Data loss due to pulled trailing edge, fragment count " + this.fragmentCount);
+			LOG.debug ("Data loss due to pulled trailing edge, fragment count {}", this.fragmentCount);
 			return 1;
 		}
 		return 0;
@@ -833,7 +840,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
  */
 	private int incomingRead (List<SocketBuffer> skbs)
 	{
-		System.out.println ("incomingRead");
+		LOG.debug ("incomingRead");
 		int bytes_read = 0;
 		int data_read = 0;
 
@@ -951,7 +958,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
  */
 	private int incomingReadApdu (List<SocketBuffer> skbs)
 	{
-		System.out.println ("incomingReadApdu");
+		LOG.debug ("incomingReadApdu");
 		int contiguous_length = 0;
 		int count = 0;
 		SocketBuffer skb = peek (this.commitLead);
@@ -1081,9 +1088,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 	public void markLost (SequenceNumber sequence)
 	{
                 checkNotNull (sequence);
-		System.out.println ("markLost ( " +
-					"\"sequence\": " + sequence + "" +
-					" )");
+		LOG.debug ("markLost (\"sequence\": {})", sequence);
 		SocketBuffer skb = peek (sequence);
 		setPacketState (skb, PacketState.PKT_LOST_DATA_STATE);
 	}

@@ -93,7 +93,7 @@ public class SocketBuffer {
 	public void put (int len) {
 		this._tail += len;
 		this._len += len;
-                checkArgument (this._tail > this._end);
+                checkArgument (this._tail <= this._end);
 	}
 
 	public void pull (int len) {
@@ -104,8 +104,8 @@ public class SocketBuffer {
 	public void reserve (int len) {
 		this._data += len;
 		this._tail += len;
-                checkArgument (this._tail > this._end);
-                checkArgument (this._data < this._head);
+                checkArgument (this._tail <= this._end);
+                checkArgument (this._data >= this._head);
 	}
 
 	public Header getHeader() {
