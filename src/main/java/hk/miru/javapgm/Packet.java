@@ -2,6 +2,8 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 public class Packet {
 
 	public static final int AFI_IP	= 1;
@@ -38,6 +40,7 @@ public class Packet {
 	public static final int PGM_TYPE_DATA_OFFSET	= SIZEOF_PGM_HEADER;
 
 	public static boolean parseUdpEncapsulated (SocketBuffer skb) {
+                checkNotNull (skb);
 		if (skb.getRawBytes().length < SIZEOF_PGM_HEADER) {
 			System.out.println ("UDP payload too small for PGM packet at " + skb.getRawBytes().length + " bytes, expecting at least " + SIZEOF_PGM_HEADER + " bytes.");
 			return false;
@@ -48,6 +51,7 @@ public class Packet {
 	}
 
 	private static boolean parse (SocketBuffer skb) {
+                checkNotNull (skb);
 		if (skb.getHeader().hasChecksum()) {
 			final int source_checksum = skb.getHeader().getChecksum();
 			skb.getHeader().clearChecksum();

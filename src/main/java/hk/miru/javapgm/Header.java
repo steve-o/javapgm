@@ -2,12 +2,16 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkArgument;
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 public class Header {
 
 	protected SocketBuffer	_skb = null;
-	protected int			_offset = 0;
+	protected int		_offset = 0;
 
 	public Header (SocketBuffer skb, int offset) {
+                checkNotNull (skb);
 		this._skb = skb;
 		this._offset = offset;
 	}
@@ -21,6 +25,7 @@ public class Header {
 	}
 
 	public void setChecksum (int csum) {
+                checkArgument (csum >> 16 == 0);
 		this._skb.setUnsignedShort (this._offset + Packet.PGM_CHECKSUM_OFFSET, csum);
 	}
 
@@ -108,7 +113,8 @@ public class Header {
 	}
 
 	public void setGlobalSourceId (GlobalSourceId gsi) {
-		System.arraycopy (gsi.getAsBytes(), 0, this._skb.getRawBytes(), this._offset + Packet.PGM_GSI_OFFSET, GlobalSourceId.SIZE);
+                checkNotNull (gsi);
+		System.arraycopy (gsi.getBytes(), 0, this._skb.getRawBytes(), this._offset + Packet.PGM_GSI_OFFSET, GlobalSourceId.SIZE);
 	}
 
 	public final int getSourcePort() {
@@ -116,6 +122,7 @@ public class Header {
 	}
 
 	public void setSourcePort (int sport) {
+                checkArgument (sport >= 0 && sport <= 65535);
 		this._skb.setUnsignedShort (this._offset + Packet.PGM_SPORT_OFFSET, sport);
 	}
 
@@ -124,6 +131,7 @@ public class Header {
 	}
 
 	public void setDestinationPort (int dport) {
+                checkArgument (dport >= 0 && dport <= 65535);
 		this._skb.setUnsignedShort (this._offset + Packet.PGM_DPORT_OFFSET, dport);
 	}
 

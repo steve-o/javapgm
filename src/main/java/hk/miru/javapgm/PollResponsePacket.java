@@ -2,6 +2,8 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 public class PollResponsePacket {
 
 	protected SocketBuffer	_skb = null;
@@ -14,6 +16,7 @@ public class PollResponsePacket {
 	private static final int POLR_OPTIONS_OFFSET	= 8;
 
 	public PollResponsePacket (SocketBuffer skb, int offset) {
+                checkNotNull (skb);
 		this._skb = skb;
 		this._offset = offset;
 	}

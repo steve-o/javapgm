@@ -3,6 +3,8 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -36,6 +38,7 @@ public class NakConfirmPacket {
 	private static final int SIZEOF_INADDR6	= 16;
 
 	public NakConfirmPacket (SocketBuffer skb, int offset) {
+                checkNotNull (skb);
 		this._skb = skb;
 		this._offset = offset;
 	}
@@ -144,7 +147,6 @@ public class NakConfirmPacket {
 		       ", \"ncfGrpNla\": " + getGroupPath() +
 		        "}";
 	}
-
 }
 
 /* eof */

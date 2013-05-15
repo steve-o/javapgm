@@ -2,7 +2,9 @@
  */
 package hk.miru.javapgm;
 
-import hk.miru.javapgm.ControlBuffer;
+import static hk.miru.javapgm.Preconditions.checkArgument;
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -49,13 +51,12 @@ public class ReceiveWindow {
 		int			dataRetryCount;
 		boolean			isContiguous;
 
-		public State (PacketState pktState)
-		{
+		public State (PacketState pktState) {
+                        checkNotNull (pktState);
 			this.pktState = pktState;
 		}
 
-		public State()
-		{
+		public State() {
 			this (PacketState.PKT_ERROR_STATE);
 		}
 	}
@@ -97,11 +98,13 @@ public class ReceiveWindow {
 	}
 
 	public static long getNakBackoffExpiration (SocketBuffer skb) {
+                checkNotNull (skb);
 		final State state = (State)skb.getControlBuffer();
 		return state.nakBackoffExpiration;
 	}
 
 	public static void setNakBackoffExpiration (SocketBuffer skb, long expiration) {
+                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 		state.nakBackoffExpiration = expiration;
 	}
@@ -111,6 +114,7 @@ public class ReceiveWindow {
 	}
 
 	public void setBackoffState (SocketBuffer skb) {
+                checkNotNull (skb);
 		setPacketState (skb, PacketState.PKT_BACK_OFF_STATE);
 	}
 
@@ -119,11 +123,13 @@ public class ReceiveWindow {
 	}
 
 	public static long getNakRepeatExpiration (SocketBuffer skb) {
+                checkNotNull (skb);
 		final State state = (State)skb.getControlBuffer();
 		return state.nakRepeatExpiration;
 	}
 
 	public static void setNakRepeatExpiration (SocketBuffer skb, long expiration) {
+                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 		state.nakRepeatExpiration = expiration;
 	}
@@ -133,6 +139,7 @@ public class ReceiveWindow {
 	}
 
 	public void setWaitNakConfirmState (SocketBuffer skb) {
+                checkNotNull (skb);
 		setPacketState (skb, PacketState.PKT_WAIT_NCF_STATE);
 	}
 
@@ -141,6 +148,7 @@ public class ReceiveWindow {
 	}
 
 	public static long getRepairDataExpiration (SocketBuffer skb) {
+                checkNotNull (skb);
 		final State state = (State)skb.getControlBuffer();
 		return state.repairDataExpiration;
 	}
@@ -150,32 +158,37 @@ public class ReceiveWindow {
 	}
 
 	public static void incrementNakTransmitCount (SocketBuffer skb) {
+                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 		state.nakTransmitCount++;
 	}
 
 	public static void incrementNcfRetryCount (SocketBuffer skb) {
+                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 		state.ncfRetryCount++;
 	}
 
 	public static long getNcfRetryCount (SocketBuffer skb) {
+                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 		return state.ncfRetryCount;
 	}
 
 	public static void incrementDataRetryCount (SocketBuffer skb) {
+                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 		state.dataRetryCount++;
 	}
 
 	public static long getDataRetryCount (SocketBuffer skb) {
+                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 		return state.dataRetryCount;
 	}
 
-	private SocketBuffer peek (SequenceNumber sequence)
-	{
+	private SocketBuffer peek (SequenceNumber sequence) {
+                checkNotNull (sequence);
 		if (isEmpty())
 			return null;
 
@@ -192,48 +205,39 @@ public class ReceiveWindow {
 		return null;
 	}
 
-	private int getCommitLength()
-	{
+	private int getCommitLength() {
 		return this.commitLead.minus (this.trail).intValue();
 	}
 
-	private boolean isCommitEmpty()
-	{
+	private boolean isCommitEmpty() {
 		return getCommitLength() == 0;
 	}
 
-	private int getIncomingLength()
-	{
+	private int getIncomingLength() {
 		return this.lead.plus (1).minus (this.commitLead).intValue();
 	}
 
-	private boolean isIncomingEmpty()
-	{
+	private boolean isIncomingEmpty() {
 		return getIncomingLength() == 0;
 	}
 
-	private int getMaxLength()
-	{
+	private int getMaxLength() {
 		return this.alloc;
 	}
 
-	private int getLength()
-	{
+	private int getLength() {
 		return this.lead.plus (1).minus (this.trail).intValue();
 	}
 
-	private int getSize()
-	{
+	private int getSize() {
 		return this.size;
 	}
 
-	private boolean isEmpty()
-	{
+	private boolean isEmpty() {
 		return getLength() == 0;
 	}
 
-	private boolean isFull()
-	{
+	private boolean isFull() {
 		return getLength() == getMaxLength();
 	}
 
@@ -245,6 +249,8 @@ public class ReceiveWindow {
 		long max_rte
 		)
 	{
+                checkNotNull (tsi);
+                checkArgument (tpdu_size > 0);
 		final int alloc_sqns = sqns > 0 ? sqns : (int)((secs * max_rte) / tpdu_size);
 		this.pdata = new SocketBuffer[alloc_sqns];
 
@@ -286,8 +292,8 @@ System.out.println ("alloc_sqns:" + alloc_sqns);
  */
 	public Returns add (SocketBuffer skb, long now, long nak_rb_expiry)
 	{
+                checkNotNull (skb);
 		Returns status;
-
 		System.out.println ("add ( " +
 					"\"skb\": " + skb + "" +
 					" )");
@@ -369,6 +375,7 @@ System.out.println ("SKB:" + skb.getSequenceNumber() + " trail:" + this.trail + 
 
 	private void define (SequenceNumber lead)
 	{
+                checkNotNull (lead);
 System.out.println ("defining window");
 		this.lead = lead;
 		this.trail = this.lead.plus (1);
@@ -380,8 +387,9 @@ System.out.println ("defining window");
 
 	public int update (SequenceNumber txw_lead, SequenceNumber txw_trail, long now, long nak_rb_expiry)
 	{
+                checkNotNull (txw_lead);
+                checkNotNull (txw_trail);
 		System.out.println ("update");
-
 		if (!this.isDefined) {
 			define (txw_trail);
 			return 0;
@@ -393,6 +401,7 @@ System.out.println ("defining window");
 
 	private void updateTrail (SequenceNumber txw_trail)
 	{
+                checkNotNull (txw_trail);
 System.out.println ("updating trail");
 /* advertised trail is less than the current value */
 		if (txw_trail.lte (this.rxw_trail))
@@ -483,6 +492,7 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
  */
 	private Returns addPlaceholderRange (SequenceNumber sequence, long now, long nak_rb_expiry)
 	{
+                checkNotNull (sequence);
 /* check bounds of commit window */
 		final int commit_length = sequence.plus (1).minus (this.trail).intValue();
 		if (!isCommitEmpty() && (commit_length >= getMaxLength())) {
@@ -510,6 +520,7 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
  */
 	private int updateLead (SequenceNumber txw_lead, long now, long nak_rb_expiry)
 	{
+                checkNotNull (txw_lead);
 		SequenceNumber lead = null;
 		int lost = 0;
 
@@ -547,6 +558,7 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
  */
 	private boolean isApduLost (SocketBuffer skb)
 	{
+                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 
 /* lost is lost */
@@ -577,17 +589,20 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
 
 	private boolean isInvalidVarPktLen (SocketBuffer skb)
 	{
+                checkNotNull (skb);
 /* FEC not available, always return valid. */
 		return false;
 	}
 
 	private boolean hasPayloadOption (SocketBuffer skb)
 	{
+                checkNotNull (skb);
 		return skb.isFragment() || skb.getHeader().isOptionEncoded();
 	}
 
 	private boolean isInvalidPayloadOption (SocketBuffer skb)
 	{
+                checkNotNull (skb);
 /* FEC not available, always return valid. */
 		return false;
 	}
@@ -600,6 +615,7 @@ System.out.println ("Placeholder #" + this.lead + " @" + index);
  */
 	private Returns insert (SocketBuffer skb)
 	{
+                checkNotNull (skb);
 System.out.println ("insert");
 		SocketBuffer placeholder = null;
 		State state = null;
@@ -652,6 +668,7 @@ System.out.println ("insert");
 
 	private void shuffleParity (SocketBuffer skb)
 	{
+                checkNotNull (skb);
 /* no-op */
 	}
 
@@ -662,6 +679,7 @@ System.out.println ("insert");
  */
 	private Returns append (SocketBuffer skb, long now)
 	{
+                checkNotNull (skb);
 System.out.println ("append");
 		if (isInvalidVarPktLen (skb) || isInvalidPayloadOption (skb)) {
 			System.out.println ("Invalid packet");
@@ -839,6 +857,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
  */
 	private boolean isTgSqnLost (SequenceNumber tg_sqn)
 	{
+                checkNotNull (tg_sqn);
 		if (isEmpty())
 			return true;
 
@@ -864,6 +883,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
  */
 	private boolean isApduComplete (SequenceNumber firstSequence)
 	{
+                checkNotNull (firstSequence);
 		SocketBuffer skb = peek (firstSequence);
 		if (null == skb)
 			return false;
@@ -954,28 +974,34 @@ System.out.println ("trail " + this.trail + " = " + skb);
  */
 	private SequenceNumber transmissionGroupSequenceNumber (SequenceNumber sequence)
 	{
+                checkNotNull (sequence);
 		final long tg_sqn_mask = 0xffffffff << this.tgSqnShift;
 		return SequenceNumber.valueOf (sequence.longValue() & tg_sqn_mask);
 	}
 
 	private int packetSequence (SequenceNumber sequence)
 	{
+                checkNotNull (sequence);
 		final long tg_sqn_mask = 0xffffffff << this.tgSqnShift;
 		return (int)(sequence.longValue() & ~tg_sqn_mask);
 	}
 
 	private boolean isFirstOfTransmissionGroup (SequenceNumber sequence)
 	{
+                checkNotNull (sequence);
 		return packetSequence (sequence) == 0;
 	}
 
 	private boolean isLastOfTransmissionGroup (SequenceNumber sequence)
 	{
+                checkNotNull (sequence);
 		return packetSequence (sequence) == (this.transmissionGroupSize - 1);
 	}
 
 	private void setPacketState (SocketBuffer skb, PacketState newState)
 	{
+                checkNotNull (skb);
+                checkNotNull (newState);
 		State state = (State)skb.getControlBuffer();
 
 		if (PacketState.PKT_ERROR_STATE != state.pktState)
@@ -1016,6 +1042,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
 
 	private void clearPacketState (SocketBuffer skb)
 	{
+                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 
 		switch (state.pktState) {
@@ -1053,6 +1080,7 @@ System.out.println ("trail " + this.trail + " = " + skb);
  */
 	public void markLost (SequenceNumber sequence)
 	{
+                checkNotNull (sequence);
 		System.out.println ("markLost ( " +
 					"\"sequence\": " + sequence + "" +
 					" )");
@@ -1062,11 +1090,13 @@ System.out.println ("trail " + this.trail + " = " + skb);
 
 	private int confirm (SequenceNumber sequence)
 	{
+                checkNotNull (sequence);
 		return -1;
 	}
 
 	private int recoveryUpdate (SequenceNumber sequence)
 	{
+                checkNotNull (sequence);
 		return -1;
 	}
 
@@ -1104,7 +1134,6 @@ System.out.println ("trail " + this.trail + " = " + skb);
 				", \"size\": " + this.size + "" +
 			"}";
 	}
-
 }
 
 /* eof */

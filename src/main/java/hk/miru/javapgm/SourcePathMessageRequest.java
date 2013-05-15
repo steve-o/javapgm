@@ -2,12 +2,15 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 public class SourcePathMessageRequest {
 
 	protected SocketBuffer	_skb = null;
 	protected int		_offset = 0;
 
 	public SourcePathMessageRequest (SocketBuffer skb, int offset) {
+                checkNotNull (skb);
 		this._skb = skb;
 		this._offset = offset;
 	}

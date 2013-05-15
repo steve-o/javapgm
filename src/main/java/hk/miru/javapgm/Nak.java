@@ -3,6 +3,9 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkArgument;
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -42,11 +45,15 @@ public class Nak {
 	private static final int SIZEOF_PGM_SQN			= 4;
 
 	public Nak (SocketBuffer skb, int offset) {
+                checkNotNull (skb);
 		this._skb = skb;
 		this._offset = offset;
 	}
 
 	public static SocketBuffer create (InetAddress nak_src_nla, InetAddress nak_grp_nla, int count) {
+                checkNotNull (nak_src_nla);
+                checkNotNull (nak_grp_nla);
+                checkArgument (count > 0 && count <= 63);
 		int tpdu_length = Packet.SIZEOF_PGM_HEADER + SIZEOF_PGM_NAK;
 		if (Inet6Address.class.isInstance (nak_src_nla))
 			tpdu_length += SIZEOF_PGM_NAK6 - SIZEOF_PGM_NAK;
@@ -71,6 +78,7 @@ public class Nak {
 	}
 
 	public void setNakSequenceNumber (SequenceNumber nak_sqn) {
+                checkNotNull (nak_sqn);
 		this._skb.setUnsignedInt (this._offset + NAK_SQN_OFFSET, nak_sqn.longValue());
 	}
 
@@ -108,6 +116,7 @@ public class Nak {
 	}
 
 	public void setNakSourceNla (InetAddress nak_src_nla) {
+                checkNotNull (nak_src_nla);
 		if (Inet4Address.class.isInstance (nak_src_nla)) {
 			setNakSourceNlaAfi (Packet.AFI_IP);
 			System.arraycopy (nak_src_nla.getAddress(), 0,
@@ -182,6 +191,7 @@ public class Nak {
 	}
 
 	public void setNakGroupNla (InetAddress nak_grp_nla) {
+                checkNotNull (nak_grp_nla);
 		int nak_grp_nla_offset;
 		switch (getNakSourceNlaAfi()) {
 		case Packet.AFI_IP:
@@ -208,6 +218,7 @@ public class Nak {
 
 /* TODO: TLC wanted */
 	public void setNakListOption (SequenceNumber[] sqn_list) {
+                checkArgument (sqn_list.length > 0 && sqn_list.length <= 62);
 		int opt_nak_list_offset;
 		switch (getNakSourceNlaAfi()) {
 		case Packet.AFI_IP:

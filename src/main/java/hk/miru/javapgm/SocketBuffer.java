@@ -2,7 +2,9 @@
  */
 package hk.miru.javapgm;
 
-import hk.miru.javapgm.ControlBuffer;
+import static hk.miru.javapgm.Preconditions.checkArgument;
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 import java.net.Socket;
 
 import javax.annotation.Nullable;
@@ -47,6 +49,7 @@ public class SocketBuffer {
 	}
 
 	public void setTransportSessionId (TransportSessionId tsi) {
+                checkNotNull (tsi);
 		this._tsi = tsi;
 	}
 
@@ -59,6 +62,7 @@ public class SocketBuffer {
 	}
 
 	public void setSequenceNumber (SequenceNumber sequence) {
+                checkNotNull (sequence);
 		this._sequence = sequence;
 	}
 
@@ -89,6 +93,7 @@ public class SocketBuffer {
 	public void put (int len) {
 		this._tail += len;
 		this._len += len;
+                checkArgument (this._tail > this._end);
 	}
 
 	public void pull (int len) {
@@ -99,6 +104,8 @@ public class SocketBuffer {
 	public void reserve (int len) {
 		this._data += len;
 		this._tail += len;
+                checkArgument (this._tail > this._end);
+                checkArgument (this._data < this._head);
 	}
 
 	public Header getHeader() {
@@ -133,7 +140,7 @@ public class SocketBuffer {
 		return this._cb;
 	}
 
-	public void setControlBuffer (ControlBuffer cb) {
+	public void setControlBuffer (@Nullable ControlBuffer cb) {
 		this._cb = cb;
 	}
 

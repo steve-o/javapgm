@@ -2,6 +2,8 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 public class OptionHeader {
 
 	protected SocketBuffer	_skb = null;
@@ -24,6 +26,7 @@ public class OptionHeader {
 	public static final int OPT_RST		= 0x0f;
 
 	public OptionHeader (SocketBuffer skb, int offset) {
+                checkNotNull (skb);
 		this._skb = skb;
 		this._offset = offset;
 	}

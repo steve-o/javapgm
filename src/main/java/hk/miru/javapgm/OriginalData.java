@@ -3,6 +3,8 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 public class OriginalData {
 
 	protected SocketBuffer	_skb = null;
@@ -17,6 +19,7 @@ public class OriginalData {
 	private static final int OPT_TOTAL_LENGTH_OFFSET = 2;
 
 	public OriginalData (SocketBuffer skb, int offset) {
+                checkNotNull (skb);
 		this._skb = skb;
 		this._offset = offset;
 	}
@@ -26,6 +29,7 @@ public class OriginalData {
 	}
 
 	public final void setDataSequenceNumber (SequenceNumber data_sqn) {
+                checkNotNull (data_sqn);
 		this._skb.setUnsignedInt (this._offset + DATA_SQN_OFFSET, data_sqn.longValue());
 	}
 
@@ -34,6 +38,7 @@ public class OriginalData {
 	}
 
 	public final void setDataTrail (SequenceNumber data_trail) {
+                checkNotNull (data_trail);
 		this._skb.setUnsignedInt (this._offset + DATA_TRAIL_OFFSET, data_trail.longValue());
 	}
 

@@ -2,6 +2,8 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 public class OptionLength {
 
 	protected SocketBuffer	_skb = null;
@@ -14,6 +16,7 @@ public class OptionLength {
 	private static final int SIZEOF_PGM_OPT_LENGTH	= 4;
 
 	public OptionLength (SocketBuffer skb, int offset) {
+                checkNotNull (skb);
 		this._skb = skb;
 		this._offset = offset;
 	}

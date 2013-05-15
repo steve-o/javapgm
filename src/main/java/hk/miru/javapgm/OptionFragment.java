@@ -2,6 +2,8 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 public class OptionFragment {
 
 	protected SocketBuffer	_skb = null;
@@ -12,6 +14,7 @@ public class OptionFragment {
 	private static final int OPT_FRAG_LEN_OFFSET	= 12;
 
 	public OptionFragment (SocketBuffer skb, int offset) {
+                checkNotNull (skb);
 		this._skb = skb;
 		this._offset = offset;
 	}

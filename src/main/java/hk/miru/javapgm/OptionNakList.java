@@ -2,6 +2,9 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkArgument;
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+
 public class OptionNakList {
 
 	protected SocketBuffer	_skb = null;
@@ -16,6 +19,8 @@ public class OptionNakList {
 	private static final int SIZEOF_PGM_SQN			= 4;
 
 	public OptionNakList (SocketBuffer skb, int offset, int count) {
+                checkNotNull (skb);
+                checkArgument (count > 0 && count <= 62);
 		this._skb = skb;
 		this._offset = offset;
 		this._count = count;
@@ -38,6 +43,8 @@ public class OptionNakList {
 	}
 
 	public void setOptionSequence (int index, SequenceNumber sequence) {
+                checkArgument (index >= 0 && index <= this._count);
+                checkNotNull (sequence);
 		this._skb.setUnsignedInt (this._offset + OPT_SQN_OFFSET + (index * SIZEOF_PGM_SQN), sequence.longValue());
 	}
 }

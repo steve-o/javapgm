@@ -3,6 +3,7 @@
  */
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkNotNull;
 import java.net.InetAddress;
 import java.util.List;
 import java.util.Queue;
@@ -30,16 +31,20 @@ public class Peer {
 		long rxw_max_rte
 		)
 	{
+                checkNotNull (tsi);
 		this.tsi = tsi;
 		this.spm_sqn = SequenceNumber.valueOf (0);
 		this.window = new ReceiveWindow (tsi, max_tpdu, rxw_sqns, rxw_secs, rxw_max_rte);
 	}
 
 	public ReceiveWindow.Returns add (SocketBuffer skb, long now, long nak_rb_expiry) {
+                checkNotNull (skb);
 		return window.add (skb, now, nak_rb_expiry);
 	}
 
 	public int update (SequenceNumber txw_lead, SequenceNumber txw_trail, long now, long nak_rb_expiry) {
+                checkNotNull (txw_lead);
+                checkNotNull (txw_trail);
 		return window.update (txw_lead, txw_trail, now, nak_rb_expiry);
 	}
 
@@ -56,6 +61,7 @@ public class Peer {
 	}
 
 	public void setGroupPath (InetAddress groupPath) {
+                checkNotNull (groupPath);
 		this.groupPath = groupPath;
 	}
 
@@ -64,6 +70,7 @@ public class Peer {
 	}
 
 	public void setNetworkLayerAddress (InetAddress nla) {
+                checkNotNull (nla);
 		this.nla = nla;
 	}
 
@@ -76,6 +83,7 @@ public class Peer {
 	}
 
 	public void setSpmSequenceNumber (SequenceNumber spm_sqn) {
+                checkNotNull (spm_sqn);
 		this.spm_sqn = spm_sqn;
 	}
 
@@ -134,8 +142,8 @@ public class Peer {
 		this.lastCumulativeLosses = this.window.getCumulativeLosses();
 	}
 
-	public void markLost (SequenceNumber sequence)
-	{
+	public void markLost (SequenceNumber sequence) {
+                checkNotNull (sequence);
 		this.window.markLost (sequence);
 	}
 
@@ -160,6 +168,7 @@ public class Peer {
 	}
 
 	public void setBackoffState (SocketBuffer skb) {
+                checkNotNull (skb);
 		this.window.setBackoffState (skb);
 	}
 
@@ -172,6 +181,7 @@ public class Peer {
 	}
 
 	public void setWaitNakConfirmState (SocketBuffer skb) {
+                checkNotNull (skb);
 		this.window.setWaitNakConfirmState (skb);
 	}
 

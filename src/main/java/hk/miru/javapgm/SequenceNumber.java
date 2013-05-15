@@ -3,11 +3,10 @@
  */
 package hk.miru.javapgm;
 
-//import static Preconditions.checkArgument;
-//import static Preconditions.checkNotNull;
-//import static UnsignedInts.INT_MASK;
-//import static UnsignedInts.compare;
-//import static UnsignedInts.toLong;
+import static hk.miru.javapgm.Preconditions.checkArgument;
+import static hk.miru.javapgm.Preconditions.checkNotNull;
+import static hk.miru.javapgm.UnsignedInts.compare;
+import static hk.miru.javapgm.UnsignedInts.toLong;
 
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
@@ -29,7 +28,7 @@ public final class SequenceNumber extends Number implements Comparable<SequenceN
 	}
 
 	public static SequenceNumber valueOf (long value) {
-		Preconditions.checkArgument ((value & UnsignedInts.INT_MASK) == value,
+		checkArgument ((value & UnsignedInts.INT_MASK) == value,
 			"value (%s) is outside the range for an unsigned integer value", value);
 		return fromIntBits ((int)value);
 	}
@@ -49,7 +48,8 @@ public final class SequenceNumber extends Number implements Comparable<SequenceN
 
 	@CheckReturnValue
 	public SequenceNumber plus (SequenceNumber val) {
-		return fromIntBits (this.value + Preconditions.checkNotNull (val).value);
+		checkNotNull (val);
+		return fromIntBits (this.value + checkNotNull (val).value);
 	}
 
 	@CheckReturnValue
@@ -59,7 +59,7 @@ public final class SequenceNumber extends Number implements Comparable<SequenceN
 
 	@CheckReturnValue
 	public SequenceNumber minus (SequenceNumber val) {
-		return fromIntBits (this.value - Preconditions.checkNotNull (val).value);
+		return fromIntBits (this.value - checkNotNull (val).value);
 	}
 
 	@Override
@@ -69,7 +69,7 @@ public final class SequenceNumber extends Number implements Comparable<SequenceN
 
 	@Override
 	public long longValue() {
-		return UnsignedInts.toLong (this.value);
+		return toLong (this.value);
 	}
 
 	@Override
@@ -84,8 +84,8 @@ public final class SequenceNumber extends Number implements Comparable<SequenceN
 
 	@Override
 	public int compareTo (SequenceNumber other) {
-		Preconditions.checkNotNull (other);
-		return UnsignedInts.compare (this.value, other.value);
+		checkNotNull (other);
+		return compare (this.value, other.value);
 	}
 
 	@Override
@@ -112,22 +112,22 @@ public final class SequenceNumber extends Number implements Comparable<SequenceN
 	}
 
 	public boolean lt (SequenceNumber other) {
-		Preconditions.checkNotNull (other);
+		checkNotNull (other);
 		return (this.value - other.value) < 0;
 	}
 
 	public boolean lte (SequenceNumber other) {
-		Preconditions.checkNotNull (other);
+		checkNotNull (other);
 		return (this.value == other.value) || ((this.value - other.value) < 0);
 	}
 
 	public boolean gt (SequenceNumber other) {
-		Preconditions.checkNotNull (other);
+		checkNotNull (other);
 		return (other.value - this.value) < 0;
 	}
 
 	public boolean gte (SequenceNumber other) {
-		Preconditions.checkNotNull (other);
+		checkNotNull (other);
 		return (this.value == other.value) || ((other.value - this.value) < 0);
 	}
 
