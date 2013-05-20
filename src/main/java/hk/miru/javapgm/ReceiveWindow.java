@@ -2,9 +2,6 @@
  */
 package hk.miru.javapgm;
 
-import static hk.miru.javapgm.Preconditions.checkArgument;
-import static hk.miru.javapgm.Preconditions.checkNotNull;
-
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -57,7 +54,7 @@ public class ReceiveWindow {
 		boolean			isContiguous;
 
 		public State (PacketState pktState) {
-                        checkNotNull (pktState);
+                        assert (null != pktState);
 			this.pktState = pktState;
 		}
 
@@ -103,13 +100,13 @@ public class ReceiveWindow {
 	}
 
 	public static long getNakBackoffExpiration (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		final State state = (State)skb.getControlBuffer();
 		return state.nakBackoffExpiration;
 	}
 
 	public static void setNakBackoffExpiration (SocketBuffer skb, long expiration) {
-                checkNotNull (skb);
+                assert (null != skb);
 		State state = (State)skb.getControlBuffer();
 		state.nakBackoffExpiration = expiration;
 	}
@@ -119,7 +116,7 @@ public class ReceiveWindow {
 	}
 
 	public void setBackoffState (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		setPacketState (skb, PacketState.PKT_BACK_OFF_STATE);
 	}
 
@@ -128,13 +125,13 @@ public class ReceiveWindow {
 	}
 
 	public static long getNakRepeatExpiration (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		final State state = (State)skb.getControlBuffer();
 		return state.nakRepeatExpiration;
 	}
 
 	public static void setNakRepeatExpiration (SocketBuffer skb, long expiration) {
-                checkNotNull (skb);
+                assert (null != skb);
 		State state = (State)skb.getControlBuffer();
 		state.nakRepeatExpiration = expiration;
 	}
@@ -144,7 +141,7 @@ public class ReceiveWindow {
 	}
 
 	public void setWaitNakConfirmState (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		setPacketState (skb, PacketState.PKT_WAIT_NCF_STATE);
 	}
 
@@ -153,7 +150,7 @@ public class ReceiveWindow {
 	}
 
 	public static long getRepairDataExpiration (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		final State state = (State)skb.getControlBuffer();
 		return state.repairDataExpiration;
 	}
@@ -163,37 +160,41 @@ public class ReceiveWindow {
 	}
 
 	public static void incrementNakTransmitCount (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		State state = (State)skb.getControlBuffer();
 		state.nakTransmitCount++;
 	}
 
 	public static void incrementNcfRetryCount (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		State state = (State)skb.getControlBuffer();
 		state.ncfRetryCount++;
 	}
 
 	public static long getNcfRetryCount (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		State state = (State)skb.getControlBuffer();
 		return state.ncfRetryCount;
 	}
 
 	public static void incrementDataRetryCount (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		State state = (State)skb.getControlBuffer();
 		state.dataRetryCount++;
 	}
 
 	public static long getDataRetryCount (SocketBuffer skb) {
-                checkNotNull (skb);
+                assert (null != skb);
 		State state = (State)skb.getControlBuffer();
 		return state.dataRetryCount;
 	}
 
+/* Returns skbuff at given index of the window.
+ */        
 	private SocketBuffer peek (SequenceNumber sequence) {
-                checkNotNull (sequence);
+/* Pre-conditions */            
+                assert (null != sequence);
+                
 		if (isEmpty())
 			return null;
 
@@ -204,12 +205,30 @@ public class ReceiveWindow {
  */
 			final int index = (int)(sequence.longValue() % getMaxLength());
 			SocketBuffer skb = this.pdata[index];
+/* Availability only guaranteed inside commit window */
+                        if (sequence.lt (this.commitLead)) {
+                                assert (null != skb);
+                                assert (SocketBuffer.isValid (skb));
+                                assert (null != skb.getTransportSessionId());
+                        }
 			return skb;
 		}
 
 		return null;
 	}
-
+     
+/* Sections of the receive window:
+ * 
+ *  |     Commit       |   Incoming   |
+ *  |<---------------->|<------------>|
+ *  |                  |              |
+ * trail         commit-lead        lead
+ *
+ * Commit buffers are currently held by the application, the window trail
+ * cannot be advanced if packets remain in the commit buffer.
+ *
+ * Incoming buffers are waiting to be passed to the application.
+ */        
 	private int getCommitLength() {
 		return this.commitLead.minus (this.trail).intValue();
 	}
@@ -246,6 +265,8 @@ public class ReceiveWindow {
 		return getLength() == getMaxLength();
 	}
 
+/* Constructor for receive window.  Zero-length windows are not permitted.
+ */        
 	public ReceiveWindow (
 		TransportSessionId tsi,
 		int tpdu_size,			/* unsigned 16-bit */
@@ -254,17 +275,30 @@ public class ReceiveWindow {
 		long max_rte
 		)
 	{
-                checkNotNull (tsi);
-                checkArgument (tpdu_size > 0);
+/* Pre-conditions */            
+                assert (null != tsi);
+                assert (tpdu_size > 0);
+                if (sqns != 0) {
+                        assert (sqns > 0);
+                        assert (secs == 0);
+                        assert (max_rte == 0);
+                } else {
+                        assert (secs > 0);
+                        assert (max_rte > 0);
+                }
+                
+                LOG.debug ("create (\"tsi\":{} \"max-tpdu\":{} \"sqns\":{} \"secs\":{} \"max-rte\":{} \"ack-c_p\":{})",
+                           tsi, max_tpdu, sqns, secs, max_rte, 0);
+                
+/* Calculate receive window parameters */
+                assert (sqns > 0 || (secs > 0 && max_rte > 0));
 		final int alloc_sqns = sqns > 0 ? sqns : (int)((secs * max_rte) / tpdu_size);
 		this.pdata = new SocketBuffer[alloc_sqns];
 
 		this.tsi = tsi;
 		this.max_tpdu = tpdu_size;
 
-LOG.debug ("alloc_sqns: {}", alloc_sqns);
-
-/* empty state:
+/* Empty state:
  *
  * trail = 0, lead = -1
  * commit_trail = commit_lead = rxw_trail = rxw_trail_init = 0
@@ -276,18 +310,41 @@ LOG.debug ("alloc_sqns: {}", alloc_sqns);
 		this.rxw_trail = SequenceNumber.ZERO;
 		this.rxw_trail_init = SequenceNumber.ZERO;
 
+/* Limit retransmit requests on late session joining */
+                this.isConstrained = true;
+                
 		this.tgSqnShift = 0;
 
-/* RxPacket array */
+/* Skbuff array */
 		this.alloc = alloc_sqns;
 
 /* Concurrent to permit modification during iteration without a listIterator. */
 		this.nakBackoffQueue = new ConcurrentLinkedQueue<> ();
 		this.waitNakConfirmQueue = new ConcurrentLinkedQueue<> ();
 		this.waitDataQueue = new ConcurrentLinkedQueue<> ();
+                
+/* Post-conditions */
+                assert (getMaxLength() == alloc_sqns);
+                assert (getLength() == 0);
+                assert (getSize() == 0);
+                assert (isEmpty());
+                assert (!isFull());
 	}
 
-/* Returns:
+/* Add skb to receive window.  Window has fixed size and will not grow.
+ * PGM skbuff data/tail pointers must point to the PGM payload, and hence skb->len
+ * is allowed to be zero.
+ *
+ * If the skb sequence number indicates lost packets placeholders will be defined
+ * for each missing entry in the window.
+ *
+ * Side effects:
+ * 1) Sequence number is set in skb from PGM header value.
+ * 2) Window may be updated with new skb.
+ * 3) Placeholders may be created for detected lost packets.
+ * 4) Parity skbs may be shuffled to accomodate original data.
+ * 
+ * Returns:
  * PGM_RXW_INSERTED - packet filled a waiting placeholder, skb consumed.
  * PGM_RXW_APPENDED - packet advanced window lead, skb consumed.
  * PGM_RXW_MISSING - missing packets detected whilst window lead was adanced, skb consumed.
@@ -297,19 +354,27 @@ LOG.debug ("alloc_sqns: {}", alloc_sqns);
  */
 	public Returns add (SocketBuffer skb, long now, long nak_rb_expiry)
 	{
-                checkNotNull (skb);
 		Returns status;
-                LOG.debug ("add (\"skb\": {})", skb);
+
+/* Pre-conditions */                
+                assert (null != skb);
+                assert (nak_rb_expiry > 0);
+                assert (getMaxLength() > 0);
+                assert (SocketBuffer.isValid (skb));
+                
+                LOG.debug ("add (\"skb\": {}, \"nak_rb_expiry\": {})",
+                           skb, nak_rb_expiry);
 
 		skb.setControlBuffer (new State ());
 		skb.setSequenceNumber (skb.getAsOriginalData().getDataSequenceNumber());
 
+/* Protocol sanity check: TSDU size */                
 		if (skb.getLength() != skb.getHeader().getTsduLength()) {
                         LOG.debug ("SKB length does not match TSDU length.");
 			return Returns.RXW_MALFORMED;
 		}
 
-/* protocol sanity check: valid trail pointer wrt. sequence */
+/* Protocol sanity check: valid trail pointer wrt. sequence */
 		if (skb.getSequenceNumber().minus (skb.getAsOriginalData().getDataTrail()).longValue() >= ((UINT32_MAX/2)-1)) {
                         LOG.debug ("SKB sequence {} outside window horizon by {} wrt trail {}",
                                     skb.getSequenceNumber(),
@@ -318,36 +383,43 @@ LOG.debug ("alloc_sqns: {}", alloc_sqns);
 			return Returns.RXW_BOUNDS;
 		}
 
-/* drop parity packets */
+/* Drop unsupported parity packets */
 		if (skb.getHeader().isParity()) {
 			LOG.debug ("Unsupported parity packet");
 			return Returns.RXW_MALFORMED;
 		}
 
+/* Verify fragment header for original data */                
 		if (skb.isFragment()) {
+/* Protocol sanity check: single fragment APDU */                    
 			if (skb.getFragmentOption().getApduLength() == skb.getLength()) {
 				LOG.debug ("Fragmented message contains only one fragment.");
 			}
+/* Protocol sanity check: minimum APDU length */                        
 			if (skb.getFragmentOption().getApduLength() < skb.getLength()) {
 				LOG.debug ("SKB length greated than APDU length.");
 				return Returns.RXW_MALFORMED;
 			}
+/* Protocol sanity check: sequential ordering */                        
 			if (skb.getFragmentOption().getFirstSequenceNumber().gt (skb.getSequenceNumber())) {
 				LOG.debug ("Fragment sequence number less than first message fragment.");
 				return Returns.RXW_MALFORMED;
 			}
+/* Protocol sanity check: maximum APDU length */                        
 			if (skb.getFragmentOption().getApduLength() > MAX_APDU) {
 				LOG.debug ("APDU greater than supported length.");
 				return Returns.RXW_MALFORMED;
 			}
 		}
 
+/* First packet of a session defines the window */                
 		if (!this.isDefined) {
-			define (skb.getSequenceNumber().minus (1));
+			define (skb.getSequenceNumber().minus (1));     /* Previous lead needed for append to occur */
 		} else {
 			updateTrail (skb.getAsOriginalData().getDataTrail());
 		}
 
+/* Bounds checking */               
 		if (skb.getSequenceNumber().lt (this.commitLead)) {
 			if (skb.getSequenceNumber().gte (this.trail)) {
 				LOG.debug ("Duplicate packet from window");
@@ -380,23 +452,50 @@ LOG.debug ("SKB:{} trail:{} commit:{} lead:{} (RXW_TRAIL:{})",
 		return status;
 	}
 
+/* Trail is the next packet to commit upstream, lead is the leading edge
+ * of the receive window with possible gaps inside, rxw_trail is the transmit
+ * window trail for retransmit requests.
+ */
+        
+/* Define window by parameters of first data packet.
+ */        
 	private void define (SequenceNumber lead)
 	{
-                checkNotNull (lead);
-LOG.debug ("defining window");
+/* Pre-conditions */            
+                assert (null != lead);
+                assert (isEmpty());
+                assert (isCommitEmpty());
+                assert (isIncomingEmpty());
+                assert (!this.isDefined);
+                
 		this.lead = lead;
 		this.trail = this.lead.plus (1);
 		this.rxw_trail_init = this.trail;
 		this.rxw_trail = this.rxw_trail_init;
 		this.commitLead = this.rxw_trail;
 		this.isConstrained = this.isDefined = true;
+                
+/* Post-conditions */
+                assert (isEmpty());
+                assert (isCommitEmpty());
+                assert (isIncomingEmpty());
+                assert (this.isDefined);
+                assert (this.isConstrained);
 	}
 
+/* Update window with latest transmitted parameters.
+ * 
+ * Returns count of placeholders added into window, used to starting sending naks.
+ */        
 	public int update (SequenceNumber txw_lead, SequenceNumber txw_trail, long now, long nak_rb_expiry)
 	{
-                checkNotNull (txw_lead);
-                checkNotNull (txw_trail);
-		LOG.debug ("update");
+/* Pre-conditions */            
+                assert (null != txw_lead);
+                assert (null != txw_trail);
+                
+		LOG.debug ("update (txw-lead:{} txw-trail:{} nak-rb-expiry:{})",
+                            txw_lead, txw_trail, nak_rb_expiry);
+                
 		if (!this.isDefined) {
 			define (txw_trail);
 			return 0;
@@ -406,19 +505,22 @@ LOG.debug ("defining window");
 		return updateLead (txw_lead, now, nak_rb_expiry);
 	}
 
+/* Update trailing edge of receive window.
+ */        
 	private void updateTrail (SequenceNumber txw_trail)
 	{
-                checkNotNull (txw_trail);
-LOG.debug ("updating trail");
-/* advertised trail is less than the current value */
+/* Pre-conditions */            
+                assert (null != txw_trail);
+                
+/* Advertised trail is less than the current value */
 		if (txw_trail.lte (this.rxw_trail))
 			return;
 
-/* protocol sanity check: advertised trail jumps too far ahead */
+/* Protocol sanity check: advertised trail jumps too far ahead */
 		if (txw_trail.minus (this.rxw_trail).longValue() > ((UINT32_MAX/2)-1))
 			return;
 
-/* retransmissions requests are constrained on startup until the advertised trail advances
+/* Retransmissions requests are constrained on startup until the advertised trail advances
  * beyond the first data sequence number.
  */
 		if (this.isConstrained) {
@@ -429,8 +531,12 @@ LOG.debug ("updating trail");
 		}
 
 		this.rxw_trail = txw_trail;
+                
+/* New value does not affect window */
+                if (this.rxw_trail.lte (this.trail))
+                        return;
 
-/* jump remaining sequence numbers if window is empty */
+/* Jump remaining sequence numbers if window is empty */
 		if (isEmpty()) {
 			final int distance = this.rxw_trail.minus (this.trail).intValue();
 			this.trail = this.trail.plus (distance);
@@ -438,15 +544,19 @@ LOG.debug ("updating trail");
 			this.lead = this.lead.plus (distance);
 
 			this.cumulativeLosses += distance;
+                        LOG.info ("Data loss due to trailing edge update, fragment count {}.",
+                                  this.fragmentCount);
+                        assert (isEmpty());
+                        assert (isCommitEmpty());
+                        assert (isIncomingEmpty());
 			return;
 		}
 
-/* remove all buffers between commit lead and advertised rxw_trail */
+/* Remove all buffers between commit lead and advertised rxw_trail */
 		for (SequenceNumber sequence = this.commitLead;
 		     this.rxw_trail.gt (sequence) && this.lead.gte (sequence);
 		     sequence = sequence.plus (1))
 		{
-LOG.debug ("Purge #{}", sequence);
 			SocketBuffer skb = peek (sequence);
 			State state = (State)skb.getControlBuffer();
 			switch (state.pktState) {
@@ -463,11 +573,14 @@ LOG.debug ("Purge #{}", sequence);
 		}
 	}
 
-/* add one placeholder to leading edge due to detected lost packet.
+/* Add one placeholder to leading edge due to detected lost packet.
  */
 	private void addPlaceholder (long now, long nak_rb_expiry)
 	{
-/* advance lead */
+/* Pre-conditions */
+                assert (!isFull());
+                
+/* Advance lead */
 		this.lead = this.lead.plus (1);
 
 		SocketBuffer skb = new SocketBuffer (this.max_tpdu);
@@ -485,32 +598,43 @@ LOG.debug ("Purge #{}", sequence);
 			}
 		}
 
-/* add skb to window */
+/* Add skb to window */
 		final int index = (int)(this.lead.longValue() % getMaxLength());
 		this.pdata[index] = skb;
 
 		setPacketState (skb, PacketState.PKT_BACK_OFF_STATE);
-LOG.debug ("Placeholder #{} pdata[{}]", this.lead, index);
+                
+/* Post-conditions */
+                assert (getLength() > 0);
+                assert (getLength() <= getMaxLength());
+                assert (getIncomingLength() > 0);
 	}
 
-/* Returns:
+/* Add a range of placeholders to the window.
+ * 
+ * Returns:
  * RXW_BOUNDS: Incoming window is bound by commit window.
  * RXW_APPENDED: Place holders added.
  */
 	private Returns addPlaceholderRange (SequenceNumber sequence, long now, long nak_rb_expiry)
 	{
-                checkNotNull (sequence);
-/* check bounds of commit window */
+/* Pre-conditions */            
+                assert (null != sequence);
+                assert (sequence.gt (this.lead));
+                
+/* Check bounds of commit window */
 		final int commit_length = sequence.plus (1).minus (this.trail).intValue();
 		if (!isCommitEmpty() && (commit_length >= getMaxLength())) {
 			updateLead (sequence, now, nak_rb_expiry);
-			return Returns.RXW_BOUNDS;
+			return Returns.RXW_BOUNDS;      /* Effectively a slow consumer */
 		}
+                
 		if (isFull()) {
 			LOG.debug ("Receive window full on placeholder sequence.");
 			removeTrail();
 		}
-/* if packet is non-contiguous to current leading edge add place holders
+                
+/* If packet is non-contiguous to current leading edge add place holders
  * TODO: can be rather inefficient on packet loss looping through dropped sequence numbers
  */
 		while (!this.lead.plus (1).equals (sequence)) {
@@ -520,22 +644,30 @@ LOG.debug ("Placeholder #{} pdata[{}]", this.lead, index);
 				removeTrail();
 			}
 		}
+                
+/* Post-conditions */
+                assert (!isFull());
+                
 		return Returns.RXW_APPENDED;
 	}
 
-/* Returns number of place holders added.
+/* Update leading edge of receiving window.
+ * 
+ * Returns number of place holders added.
  */
 	private int updateLead (SequenceNumber txw_lead, long now, long nak_rb_expiry)
 	{
-                checkNotNull (txw_lead);
 		SequenceNumber lead = null;
 		int lost = 0;
+            
+/* Pre-conditions */            
+                assert (null != txw_lead);               
 
-/* advertised lead is less than the current value */
+/* Advertised lead is less than the current value */
 		if (txw_lead.lte (this.lead))
 			return 0;
 
-/* committed packets limit constrain the lead until they are released */
+/* Committed packets limit constrain the lead until they are released */
 		if (!isCommitEmpty() &&
 		    txw_lead.minus (this.trail).intValue() >= getMaxLength())
 		{
@@ -546,11 +678,12 @@ LOG.debug ("Placeholder #{} pdata[{}]", this.lead, index);
 		else
 			lead = txw_lead;
 
-/* count lost sequences */
+/* Count lost sequences */
 		while (!this.lead.equals (lead))
 		{
-/* slow consumer or fast producer */
+/* Slow consumer or fast producer */
 			if (isFull()) {
+                                assert (isCommitEmpty());
 				LOG.debug ("Receive window full on window lead advancement.");
 				removeTrail();
 			}
@@ -565,25 +698,27 @@ LOG.debug ("Placeholder #{} pdata[{}]", this.lead, index);
  */
 	private boolean isApduLost (SocketBuffer skb)
 	{
-                checkNotNull (skb);
 		State state = (State)skb.getControlBuffer();
 
-/* lost is lost */
+/* Pre-conditions */                
+                assert (null != skb);
+                
+/* Lost is lost */
 		if (PacketState.PKT_LOST_DATA_STATE == state.pktState)
 			return true;
 
-/* by definition, a single-TPDU APDU is complete */
+/* By definition, a single-TPDU APDU is complete */
 		if (!skb.isFragment())
 			return false;
 
 		final SequenceNumber apdu_first_sequence = skb.getFragmentOption().getFirstSequenceNumber();
 
-/* by definition, first fragment indicates APDU is available */
+/* By definition, first fragment indicates APDU is available */
 		if (apdu_first_sequence.equals (skb.getSequenceNumber()))
 			return false;
 
 		final SocketBuffer first_skb = peek (apdu_first_sequence);
-/* first fragment out-of-bounds */
+/* First fragment out-of-bounds */
 		if (null == first_skb)
 			return true;
 
@@ -594,27 +729,36 @@ LOG.debug ("Placeholder #{} pdata[{}]", this.lead, index);
 		return false;
 	}
 
+/* Returns true if skb is a parity packet with packet length not
+ * matching the transmission group length without the variable-packet-length
+ * flag set.
+ */        
 	private boolean isInvalidVarPktLen (SocketBuffer skb)
 	{
-                checkNotNull (skb);
+                assert (null != skb);
 /* FEC not available, always return valid. */
 		return false;
 	}
 
 	private boolean hasPayloadOption (SocketBuffer skb)
 	{
-                checkNotNull (skb);
+                assert (null != skb);
 		return skb.isFragment() || skb.getHeader().isOptionEncoded();
 	}
 
+/* Returns true if skb options are invalid when compared to the transmissino group
+ */        
 	private boolean isInvalidPayloadOption (SocketBuffer skb)
 	{
-                checkNotNull (skb);
+                assert (null != skb);
 /* FEC not available, always return valid. */
 		return false;
 	}
 
-/* Returns:
+/* Insert skb into window range, discard if duplicate.  Window will have placeholder,
+ * parity of data packet already matching sequence.
+ * 
+ * Returns:
  * PGM_RXW_INSERTED - packet filled a waiting placeholder, skb consumed.
  * PGM_RXW_DUPLICATE - re-transmission of previously seen packet.
  * PGM_RXW_MALFORMED - corrupted or invalid packet.
@@ -622,10 +766,12 @@ LOG.debug ("Placeholder #{} pdata[{}]", this.lead, index);
  */
 	private Returns insert (SocketBuffer skb)
 	{
-                checkNotNull (skb);
-LOG.debug ("insert");
 		SocketBuffer placeholder = null;
 		State state = null;
+
+/* Pre-conditions */            
+                assert (null != skb);
+                assert (!isIncomingEmpty());
 
 		if (isInvalidVarPktLen (skb) || isInvalidPayloadOption (skb)) {
 			LOG.debug ("Invalid packet");
@@ -648,6 +794,7 @@ LOG.debug ("insert");
 			return Returns.RXW_BOUNDS;
 		}
 
+/* Verify placeholder state */                
 		switch (state.pktState) {
 		case PKT_BACK_OFF_STATE:
 		case PKT_WAIT_NCF_STATE:
@@ -662,9 +809,9 @@ LOG.debug ("insert");
 			break;
 		}
 
-/* statistics */
+/* Statistics */
 
-/* replace placeholder skb with incoming skb */
+/* Replace placeholder skb with incoming skb */
 		final int index = (int)(skb.getSequenceNumber().longValue() % getMaxLength());
 		this.pdata[index] = skb;
 		setPacketState (skb, PacketState.PKT_HAVE_DATA_STATE);
@@ -673,21 +820,26 @@ LOG.debug ("insert");
 		return Returns.RXW_INSERTED;
 	}
 
+/* Shuffle parity packet at skb.sequence to any other needed spot.
+ */        
 	private void shuffleParity (SocketBuffer skb)
 	{
-                checkNotNull (skb);
+                assert (null != skb);
 /* no-op */
 	}
 
-/* Returns:
+/* skb advances the window lead.
+ * 
+ * Returns:
  * PGM_RXW_APPENDED - packet advanced window lead, skb consumed.
  * PGM_RXW_MALFORMED - corrupted or invalid packet.
  * PGM_RXW_BOUNDS - packet out of window.
  */
 	private Returns append (SocketBuffer skb, long now)
 	{
-                checkNotNull (skb);
-LOG.debug ("append");
+/* Pre-conditions */            
+                assert (null != skb);
+                
 		if (isInvalidVarPktLen (skb) || isInvalidPayloadOption (skb)) {
 			LOG.debug ("Invalid packet");
 			return Returns.RXW_MALFORMED;
@@ -699,11 +851,11 @@ LOG.debug ("append");
 				removeTrail();
 			} else {
 				LOG.debug ("Receive window full with commit data.");
-				return Returns.RXW_BOUNDS;
+				return Returns.RXW_BOUNDS;      /* Constrained by commit window */
 			}
 		}
 
-/* advance leading edge */
+/* Advance leading edge */
 		this.lead = this.lead.plus (1);
 
 /* APDU fragments are already declared lost */
@@ -713,7 +865,7 @@ LOG.debug ("append");
 			lost_skb.setTimestamp (now);
 			lost_skb.setSequenceNumber (skb.getSequenceNumber());
 
-/* add lost-placeholder skb to window */
+/* Add lost-placeholder skb to window */
 			final int index = (int)(lost_skb.getSequenceNumber().longValue() % getMaxLength());
 			this.pdata[index] = skb;
 
@@ -722,7 +874,7 @@ LOG.debug ("append");
 			return Returns.RXW_BOUNDS;
 		}
 
-/* add skb to window */
+/* Add skb to window */
 		if (skb.getHeader().isParity()) {
 			return Returns.RXW_MALFORMED;
 		} else {
@@ -731,13 +883,13 @@ LOG.debug ("append");
 			setPacketState (skb, PacketState.PKT_HAVE_DATA_STATE);
 		}
 
-/* statistics */
+/* Statistics */
 		this.size += skb.getLength();
 			
 		return Returns.RXW_APPENDED;
 	}
 
-/* remove references to all commit packets not in the same transmission group
+/* Remove references to all commit packets not in the same transmission group
  * as the commit-lead
  */
 	public void removeCommit()
@@ -756,37 +908,45 @@ LOG.debug ("append");
 		return (this.committedCount > 0);
 	}
 
-/* flush packets but instead of calling on_data append the contiguous data packets
+/* Flush packets but instead of calling on_data append the contiguous data packets
  * to the provided scatter/gather vector.
  *
- * when transmission groups are enabled, packets remain in the windows tagged committed
- * until the transmission group has been completely committed.  this allows the packet
+ * When transmission groups are enabled, packets remain in the windows tagged committed
+ * until the transmission group has been completely committed.  This allows the packet
  * data to be used in parity calculations to recover the missing packets.
  *
- * returns -1 on nothing read, returns length of bytes read, 0 is a valid read length.
+ * Returns -1 on nothing read, returns length of bytes read, 0 is a valid read length.
  */
 	public int read (List<SocketBuffer> skbs)
 	{
-LOG.debug ("read");
 		int bytes_read = -1;
+                
+/* Pre-conditions */
+                assert (null != skbs);
+  //              assert (skbs.capacity() > 0);
+                
+                LOG.debug ("read (\"skbs.size\": {})", skbs.size());
+                
 		if (isIncomingEmpty())
 			return bytes_read;
-LOG.debug ("read #{}", this.commitLead);
+                
 		SocketBuffer skb = peek (this.commitLead);
+                assert (null != skb);
+                
 		State state = (State)skb.getControlBuffer();
 		switch (state.pktState) {
 		case PKT_HAVE_DATA_STATE:
 			bytes_read = incomingRead (skbs);
 			break;
 		case PKT_LOST_DATA_STATE:
-/* do not purge in situ sequence */
+/* Do not purge in situ sequence */
 			if (isCommitEmpty()) {
 				LOG.debug ("Removing lost trail from window");
 				removeTrail();
 			} else {
 				LOG.debug ("Locking trail at commit window");
 			}
-/* fall through */
+/* Fall through */
 		case PKT_BACK_OFF_STATE:
 		case PKT_WAIT_NCF_STATE:
 		case PKT_WAIT_DATA_STATE:
@@ -803,25 +963,26 @@ LOG.debug ("read #{}", this.commitLead);
 		return bytes_read;
 	}
 
-/* remove lost sequences from the trailing edge of the window.  lost sequence
+/* Remove lost sequences from the trailing edge of the window.  lost sequence
  * at lead of commit window invalidates all parity-data packets as any
  * transmission group is now unrecoverable.
  *
- * returns number of sequences purged.
+ * Returns number of sequences purged.
  */
 	private int removeTrail()
 	{
-LOG.debug ("removeTrail");
+/* Pre-conditions */
+                assert (!isEmpty());
+            
 		SocketBuffer skb = peek (this.trail);
-LOG.debug ("trail {} = {}", this.trail, skb);
 		clearPacketState (skb);
 		this.size -= skb.getLength();
-/* remove reference to skb */
+/* Remove reference to skb */
 		skb = null;
 		final boolean data_loss = this.trail.equals (this.commitLead);
 		this.trail = this.trail.plus (1);
 		if (data_loss) {
-/* data-loss */
+/* Data-loss */
 			this.commitLead = this.commitLead.plus (1);
 			this.cumulativeLosses++;
 			LOG.debug ("Data loss due to pulled trailing edge, fragment count {}", this.fragmentCount);
@@ -830,22 +991,29 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 		return 0;
 	}
 
-/* read contiguous APDU-grouped sequences from the incoming window.
+/* Read contiguous APDU-grouped sequences from the incoming window.
  *
- * side effects:
+ * Side effects:
  *
  * 1) increments statics for window messages and bytes read.
  *
- * returns count of bytes read.
+ * Returns count of bytes read.
  */
 	private int incomingRead (List<SocketBuffer> skbs)
 	{
-		LOG.debug ("incomingRead");
 		int bytes_read = 0;
 		int data_read = 0;
+                
+/* Pre-conditions */
+                assert (null != skbs);
+//                assert (skbs.capacity() > 0);
+                assert (!isIncomingEmpty());
+                
+		LOG.debug ("incomingRead (\"skbs.size\": {})", skbs.size());
 
 		do {
 			SocketBuffer skb = peek (this.commitLead);
+                        assert (null != skb);
 			if (isApduComplete (skb.isFragment() ? skb.getFragmentOption().getFirstSequenceNumber() : skb.getSequenceNumber()))
 			{
 				bytes_read += incomingReadApdu (skbs);
@@ -861,10 +1029,15 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 	}
 
 /* Returns TRUE if transmission group is lost.
+ * 
+ * Checking is lightly limited to bounds.
  */
 	private boolean isTgSqnLost (SequenceNumber tg_sqn)
 	{
-                checkNotNull (tg_sqn);
+/* Pre-conditions */            
+                assert (null != tg_sqn);
+                assert (packetSequence (tg_sqn) == 0);
+                
 		if (isEmpty())
 			return true;
 
@@ -874,23 +1047,27 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 		return false;
 	}
 
-/* check every TPDU in an APDU and verify that the data has arrived
+/* Check every TPDU in an APDU and verify that the data has arrived
  * and is available to commit to the application.
  *
- * if APDU sits in a transmission group that can be reconstructed use parity
+ * If APDU sits in a transmission group that can be reconstructed use parity
  * data then the entire group will be decoded and any missing data packets
  * replaced by the recovery calculation.
  *
- * packets with single fragment fragment headers must be normalised as regular
+ * Packets with single fragment fragment headers must be normalised as regular
  * packets before calling.
  *
  * APDUs exceeding PGM_MAX_FRAGMENTS or PGM_MAX_APDU length will be discarded.
  *
- * returns FALSE if APDU is incomplete or longer than max_len sequences.
+ * Returns FALSE if APDU is incomplete or longer than max_len sequences.
  */
 	private boolean isApduComplete (SequenceNumber firstSequence)
 	{
-                checkNotNull (firstSequence);
+/* Pre-conditions */            
+                assert (null != firstSequence);
+                
+                LOG.debug ("isApduComplete (\"firstSequence\": {})", firstSequence);
+                
 		SocketBuffer skb = peek (firstSequence);
 		if (null == skb)
 			return false;
@@ -898,7 +1075,7 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 		final long apdu_size = skb.isFragment()? skb.getFragmentOption().getApduLength() : skb.getLength();
 		final SequenceNumber tg_sqn = transmissionGroupSequenceNumber (firstSequence);
 
-/* protocol sanity check: maximum length */
+/* Protocol sanity check: maximum length */
 		if (apdu_size > MAX_APDU) {
 			markLost (firstSequence);
 			return false;
@@ -918,23 +1095,23 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 				return false;
 			}
 
-/* single packet APDU, already complete */
+/* Single packet APDU, already complete */
 			if (PacketState.PKT_HAVE_DATA_STATE == state.pktState && !skb.isFragment())
 				return true;
 
-/* protocol sanity check: matching first sequence reference */
+/* Protocol sanity check: matching first sequence reference */
 			if (!skb.getFragmentOption().getFirstSequenceNumber().equals (firstSequence)) {
 				markLost (firstSequence);
 				return false;
 			}
 
-/* protocol sanity check: matching apdu length */
+/* Protocol sanity check: matching apdu length */
 			if (skb.getFragmentOption().getApduLength() != apdu_size) {
 				markLost (firstSequence);
 				return false;
 			}
 
-/* protocol sanity check: maximum number of fragments per apdu */
+/* Protocol sanity check: maximum number of fragments per apdu */
 			if (++contiguous_tpdus > MAX_FRAGMENTS) {
 				markLost (firstSequence);
 				return false;
@@ -949,20 +1126,28 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 			}
 		}
 
-/* pending */
+/* Pending */
 		return false;
 	}
 
-/* read one APDU consisting of one or more TPDUs.  target array is guaranteed
+/* Read one APDU consisting of one or more TPDUs.  Target array is guaranteed
  * to be big enough to store complete APDU.
  */
 	private int incomingReadApdu (List<SocketBuffer> skbs)
 	{
-		LOG.debug ("incomingReadApdu");
 		int contiguous_length = 0;
 		int count = 0;
+                
+/* Pre-conditions */
+                assert (null != skbs);
+                
+		LOG.debug ("incomingReadApdu (\"skbs.size\": {})", skbs.size());
+                
 		SocketBuffer skb = peek (this.commitLead);
+                assert (null != skb);
+                
 		final long apdu_len = skb.isFragment() ? skb.getFragmentOption().getApduLength() : skb.getLength();
+                assert (apdu_len >= skb.getLength());
 
 		do {
 			setPacketState (skb, PacketState.PKT_COMMIT_DATA_STATE);
@@ -974,43 +1159,65 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 			skb = peek (this.commitLead);
 		} while (apdu_len > contiguous_length);
 
+/* Post-conditions */
+                assert (!isCommitEmpty());
+                
 		return contiguous_length;
 	}
 
-/* returns transmission group sequence (TG_SQN) from sequence (SQN).
+/* Returns transmission group sequence (TG_SQN) from sequence (SQN).
  */
 	private SequenceNumber transmissionGroupSequenceNumber (SequenceNumber sequence)
 	{
-                checkNotNull (sequence);
+/* Pre-conditions */            
+                assert (null != sequence);
+                
 		final long tg_sqn_mask = 0xffffffff << this.tgSqnShift;
 		return SequenceNumber.valueOf (sequence.longValue() & tg_sqn_mask);
 	}
 
+/* Returns packet number (PKT_SQN) from sequence (SQN).
+ */        
 	private int packetSequence (SequenceNumber sequence)
 	{
-                checkNotNull (sequence);
+/* Pre-conditions */            
+                assert (null != sequence);
+                
 		final long tg_sqn_mask = 0xffffffff << this.tgSqnShift;
 		return (int)(sequence.longValue() & ~tg_sqn_mask);
 	}
 
+/* Returns true when the sequence is the first of a transmission group.
+ */        
 	private boolean isFirstOfTransmissionGroup (SequenceNumber sequence)
 	{
-                checkNotNull (sequence);
+/* Pre-conditions */            
+                assert (null != sequence);
+                
 		return packetSequence (sequence) == 0;
 	}
 
+/* Returns true when the sequence is the last of a transmission group.
+ */        
 	private boolean isLastOfTransmissionGroup (SequenceNumber sequence)
 	{
-                checkNotNull (sequence);
+/* Pre-conditions */            
+                assert (null != sequence);
+                
 		return packetSequence (sequence) == (this.transmissionGroupSize - 1);
 	}
 
+/* Set PGM skbuff to new FSM state.
+ */        
 	private void setPacketState (SocketBuffer skb, PacketState newState)
 	{
-                checkNotNull (skb);
-                checkNotNull (newState);
+/* Pre-conditions */            
+                assert (null != skb);
+                assert (null != newState);
+                
 		State state = (State)skb.getControlBuffer();
 
+/* Remove current state */                
 		if (PacketState.PKT_ERROR_STATE != state.pktState)
 			clearPacketState (skb);
 
@@ -1047,9 +1254,13 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 		state.pktState = newState;
 	}
 
+/* Remove current state from sequence.
+ */        
 	private void clearPacketState (SocketBuffer skb)
 	{
-                checkNotNull (skb);
+/* Pre-conditions */            
+                assert (null != skb);
+                
 		State state = (State)skb.getControlBuffer();
 
 		switch (state.pktState) {
@@ -1083,28 +1294,55 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 		state.pktState = PacketState.PKT_ERROR_STATE;
 	}
 
-/* mark an existing sequence lost due to failed recovery.
+/* Mark an existing sequence lost due to failed recovery.
  */
 	public void markLost (SequenceNumber sequence)
 	{
-                checkNotNull (sequence);
+/* Pre-conditions */            
+                assert (null != sequence);
+                assert (!isEmpty());
+                
 		LOG.debug ("markLost (\"sequence\": {})", sequence);
+                
 		SocketBuffer skb = peek (sequence);
+                assert (null != skb);
+                
 		setPacketState (skb, PacketState.PKT_LOST_DATA_STATE);
 	}
 
+/* Received a uni/multicast ncf, search for a matching nak & tag or extend window if
+ * beyond lead
+ *
+ * Returns:
+ * PGM_RXW_BOUNDS - sequence is outside of window, or window is undefined.
+ * PGM_RXW_UPDATED - receiver state updated, waiting for data.
+ * PGM_RXW_DUPLICATE - data already exists at sequence.
+ * PGM_RXW_APPENDED - lead is extended with state set waiting for data.
+ */        
 	private int confirm (SequenceNumber sequence)
 	{
-                checkNotNull (sequence);
+                assert (null != sequence);
 		return -1;
 	}
 
+/* Update an incoming sequence with state transition to WAIT-DATA.
+ *
+ * Returns:
+ * PGM_RXW_UPDATED - receiver state updated, waiting for data.
+ * PGM_RXW_DUPLICATE - data already exists at sequence.
+ */        
 	private int recoveryUpdate (SequenceNumber sequence)
 	{
-                checkNotNull (sequence);
+                assert (null != sequence);
 		return -1;
 	}
 
+/* Append an skb to the incoming window with WAIT-DATA state.
+ *
+ * Returns:
+ * PGM_RXW_APPENDED - lead is extended with state set waiting for data.
+ * PGM_RXW_BOUNDS   - constrained by commit window
+ */        
 	private int recoveryAppend()
 	{
 		return -1;
@@ -1125,10 +1363,19 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 		return this.cumulativeLosses;
 	}
 
+/* Dump window state */        
         @Override
 	public String toString() {
 		return	"{" +
-				  "\"lead\": " + this.lead + "" +
+				  "\"tsi\": \"" + this.tsi + "\"" +
+				", \"nakBackoffQueue\": { \"length\": " + this.nakBackoffQueue.size() + " }" +
+				", \"waitNakConfirmQueue\": { \"length\": " + this.waitNakConfirmQueue.size() + " }" +
+				", \"waitDataQueue\": { \"length\": " + this.waitDataQueue.size() + " }" +
+				", \"lostCount\": " + this.lostCount + "" +
+				", \"fragmentCount\": " + this.fragmentCount + "" +
+				", \"committedCount\": " + this.committedCount + "" +
+				", \"max_tpdu\": " + this.max_tpdu + "" +
+				", \"lead\": " + this.lead + "" +
 				", \"trail\": " + this.trail + "" +
 				", \"RXW_TRAIL\": " + this.rxw_trail + "" +
 				", \"RXW_TRAIL_INIT\": " + this.rxw_trail_init + "" +
@@ -1136,7 +1383,11 @@ LOG.debug ("trail {} = {}", this.trail, skb);
 				", \"isConstrained\": " + this.isConstrained + "" +
 				", \"isDefined\": " + this.isDefined + "" +
 				", \"hasEvent\": " + this.hasEvent + "" +
+				", \"cumulativeLosses\": " + this.cumulativeLosses + "" +
+				", \"bytesDelivered\": " + this.bytesDelivered + "" +
+				", \"messagesDelivered\": " + this.messagesDelivered + "" +
 				", \"size\": " + this.size + "" +
+				", \"alloc\": " + this.alloc + "" +
 			"}";
 	}
 }

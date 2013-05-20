@@ -204,7 +204,33 @@ public class SocketBuffer {
                            (getUnsignedByte (offset + 7) <<  0);
 	}
 
-/* Java has no support for unsigned long primitive types. */
+        public static boolean isValid (SocketBuffer skb) {
+                if (null == skb) return false;
+/* Socket */                
+//                if (null == skb._socket) return false;
+/* Timestamp */
+                if (skb._timestamp <= 0) return false;
+/* TSI */
+/* Sequence can be any value */
+/* ControlBuffer can be any value */
+/* Length can be any value */
+/* Pointers */
+                if (skb._head < 0) return false;
+                if (skb._data < 0) return false;
+                if (skb._tail < 0) return false;
+                if (skb._data > skb._tail) return false;
+                if (skb._len != (skb._tail - skb._data)) return false;
+                if (skb._end < 0) return false;
+                if (skb._tail > skb._end) return false;
+/* PGM header */
+                if (null != skb._header) {
+                        if (null == skb._odata) return false;
+                } else {
+                        if (null != skb._odata) return false;
+                        if (null != skb._opt_fragment) return false;
+                }
+                return true;
+        }
 
         @Override
 	public String toString() {
