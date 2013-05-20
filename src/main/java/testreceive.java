@@ -108,7 +108,7 @@ public class testreceive {
 		Runtime.getRuntime().addShutdownHook (new Thread() {
 			@Override
 			public void run() {
-				LOG.info ("fin.");
+				System.out.println ("fin.");
 			}
 		});
 
@@ -127,16 +127,16 @@ public class testreceive {
 					on_data (skbs);
 					break;
 				case IO_STATUS_TIMER_PENDING:
-					LOG.info ("timer pending ...");
+					System.out.println ("timer pending ...");
 					break;
 				case IO_STATUS_RATE_LIMITED:
-					LOG.info ("rate limited ...");
+					System.out.println ("rate limited ...");
 					break;
 				case IO_STATUS_WOULD_BLOCK:
-					LOG.info ("would block.");
+					System.out.println ("would block.");
 					break;
 				default:
-					LOG.error ("unhandled return state: ", status);
+					System.err.format ("unhandled return state: %s%n", status);
 					break;
 				}
 			}
@@ -144,10 +144,10 @@ public class testreceive {
 	}
 
 	private void on_data (List<SocketBuffer> skbs) {
-		LOG.info ("Received {} SKBs", skbs.size());
+		System.out.format ("Received %d SKBs%n", skbs.size());
 		int i = 1;
 		for (SocketBuffer skb : skbs) {
-			LOG.info ("#{} from {}: \"{}\"",
+			System.out.format ("#%d from %s: \"%s\"%n",
                                    i++, skb.getTransportSessionId(), new String (skb.getRawBytes(), skb.getDataOffset(), skb.getLength()));
 		}
 	}
