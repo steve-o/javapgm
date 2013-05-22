@@ -12,9 +12,7 @@ public class TransportSessionId
 	private GlobalSourceId gsi = null;
 	private int sourcePort = 0;
 
-	public TransportSessionId (GlobalSourceId gsi, int sourcePort) {
-                checkNotNull (gsi);
-                checkArgument (sourcePort >= 0 && sourcePort <= 65535);
+	public TransportSessionId (@Nullable GlobalSourceId gsi, int sourcePort) {
                 this.gsi = gsi;
                 this.sourcePort = sourcePort;
 	}

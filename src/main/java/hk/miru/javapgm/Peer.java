@@ -12,7 +12,7 @@ import java.util.Queue;
 public class Peer {
        
 	private TransportSessionId tsi = null;
-	private InetAddress groupPath = null;
+	private InetAddress group_nla = null;
 	private InetAddress nla = null, local_nla = null;
 	private long lastPacketTimestamp = 0;
 	private SequenceNumber spm_sqn = null;
@@ -60,10 +60,14 @@ public class Peer {
 	public int getSourcePort() {
 		return this.tsi.getSourcePort();
 	}
+        
+        public InetAddress getGroupAddress() {
+                return this.group_nla;
+        }
 
-	public void setGroupPath (InetAddress groupPath) {
-                checkNotNull (groupPath);
-		this.groupPath = groupPath;
+	public void setGroupAddress (InetAddress group_nla) {
+                checkNotNull (group_nla);
+		this.group_nla = group_nla;
 	}
 
 	public InetAddress getNetworkLayerAddress() {
@@ -206,7 +210,7 @@ public class Peer {
 	public String toString() {
 		return	 "{ " +
 			  "\"tsi\": \"" + this.tsi + "\"" +
-			", \"groupPath\": " + this.groupPath + "" +
+			", \"group\": " + this.group_nla + "" +
 			", \"lastPacketTimestamp\": " + this.lastPacketTimestamp + "" +
 			", \"window\": " + this.window + "" +
 			 " }";

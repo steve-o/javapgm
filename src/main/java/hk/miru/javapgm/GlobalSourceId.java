@@ -40,6 +40,11 @@ public class GlobalSourceId
 		this (gsi.getBytes());
 	}
 
+        public GlobalSourceId (String hostname) throws NoSuchAlgorithmException {
+		this.identifier = new byte[SIZE];
+		set (hostname);                
+        }
+        
 /**
  * Constructs a new {@code GlobalSourceId} from the local node name.
  * 
@@ -47,7 +52,7 @@ public class GlobalSourceId
  * @throws NoSuchAlgorithmException 
  */        
        	public GlobalSourceId() throws UnknownHostException, NoSuchAlgorithmException {
-		this (InetAddress.getLocalHost().getHostName().getBytes());
+		this (InetAddress.getLocalHost().getHostName());
 	} 
            
         @Override
@@ -111,7 +116,7 @@ public class GlobalSourceId
 /* Create a global session ID based on the MD5 of a user provided data block.
  */
 	public final void set (byte[] bytes) {
-                checkArgument (bytes.length == SIZE);
+                checkArgument (bytes.length >= SIZE);
 		this.identifier[0] = bytes[0];
 		this.identifier[1] = bytes[1];
 		this.identifier[2] = bytes[2];

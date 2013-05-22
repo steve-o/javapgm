@@ -3,20 +3,44 @@
 package hk.miru.javapgm;
 
 import static hk.miru.javapgm.Preconditions.checkNotNull;
+import java.net.ProtocolFamily;
+import java.net.StandardProtocolFamily;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import javax.annotation.Nullable;
 
 public class Packet {
 
         private static Logger LOG = LogManager.getLogger (Packet.class.getName());
     
+/* address family indicator, rfc 1700 (ADDRESS FAMILY NUMBERS) */        
 	public static final int AFI_IP	= 1;
 	public static final int AFI_IP6	= 2;
 
+/* UDP ports for UDP encapsulation, as per IBM WebSphere MQ */
+	public static final int DEFAULT_UDP_ENCAP_UCAST_PORT	= 3055;
+	public static final int DEFAULT_UDP_ENCAP_MCAST_PORT	= 3056;       
+        
+/* PGM default ports */        
+	public static final int DEFAULT_DATA_DESTINATION_PORT	= 7500;
+	public static final int DEFAULT_DATA_SOURCE_PORT	= 0;
+        
+        public static final int PGM_MAX_APDU            = 65535;
+        public static final int PGM_MAX_FRAGMENTS       = 16;
+        
 	public static final int SIZEOF_INADDR		= 4;
 	public static final int SIZEOF_INADDR6		= 16;
+	public static final int SIZEOF_IP_HEADER	= 20;
+	public static final int SIZEOF_IP6_HEADER	= 40;
 	public static final int SIZEOF_PGM_HEADER	= 16;
+        public static final int SIZEOF_PGM_DATA         = 8;
+        public static final int SIZEOF_PGM_OPT_HEADER	= 3;
+        public static final int SIZEOF_PGM_OPT_LENGTH	= 4;
+        public static final int SIZEOF_PGM_OPT_FRAGMENT	= 13;
+        public static final int SIZEOF_PGM_OPT_PGMCC_DATA	= 13;
+        public static final int SIZEOF_PGM_OPT6_PGMCC_DATA	= 25;
 
 	public static final int PGM_SPM			= 0x00;
 	public static final int PGM_POLL		= 0x01;
@@ -44,6 +68,20 @@ public class Packet {
 	public static final int PGM_TSDU_LENGTH_OFFSET	= 14;
 	public static final int PGM_TYPE_DATA_OFFSET	= SIZEOF_PGM_HEADER;
 
+        public static int calculateOffset (boolean canFragment, @Nullable ProtocolFamily pgmcc_family) {
+                int data_size = SIZEOF_PGM_HEADER + SIZEOF_PGM_DATA;
+                int pkt_size = data_size;
+                if (canFragment || (null != pgmcc_family))
+                        pkt_size += SIZEOF_PGM_OPT_LENGTH + SIZEOF_PGM_OPT_HEADER;
+                if (canFragment)
+                        pkt_size += SIZEOF_PGM_OPT_FRAGMENT;
+                if (StandardProtocolFamily.INET == pgmcc_family)
+                        pkt_size += SIZEOF_PGM_OPT_PGMCC_DATA;
+                else if (StandardProtocolFamily.INET6 == pgmcc_family)
+                        pkt_size += SIZEOF_PGM_OPT6_PGMCC_DATA;
+                return pkt_size;
+        }
+        
 	public static boolean parseUdpEncapsulated (SocketBuffer skb) {
                 checkNotNull (skb);
 		if (skb.getRawBytes().length < SIZEOF_PGM_HEADER) {
