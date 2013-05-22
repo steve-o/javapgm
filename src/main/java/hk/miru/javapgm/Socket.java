@@ -580,7 +580,7 @@ public class Socket {
 				this.buffer.clear();
 				this.rx_buffer.setTimestamp (System.currentTimeMillis());
 /* Rx testing */
-if (Math.random() < 0.25) {
+if (false && (Math.random() < 0.25)) {
 	LOG.info ("Dropping packet.");
 	continue;
 }
