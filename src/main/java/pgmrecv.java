@@ -16,7 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class testreceive {   
+public class pgmrecv {   
 /* Windows does not have convenient adapter names. */
 	String interfaceName = "10.67.4.75";
 //	String interfaceName = "10.0.9.30";
@@ -38,7 +38,7 @@ public class testreceive {
 
         hk.miru.javapgm.Socket sock = null;
 
-	public testreceive (String[] args) throws IOException, NoSuchAlgorithmException
+	public pgmrecv (String[] args) throws IOException, NoSuchAlgorithmException
 	{               
 		InetAddress group = InetAddress.getByName (this.multicastGroup);
 		ProtocolFamily pf = group instanceof Inet4Address ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;                
@@ -141,7 +141,7 @@ public class testreceive {
 
 	public static void main (String[] args) throws IOException, NoSuchAlgorithmException
 	{
-		new testreceive (args);
+		new pgmrecv (args);
 	}
 }
 
