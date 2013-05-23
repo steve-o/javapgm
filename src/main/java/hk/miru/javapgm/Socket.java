@@ -4,6 +4,7 @@
 
 package hk.miru.javapgm;
 
+import static hk.miru.javapgm.Preconditions.checkArgument;
 import static hk.miru.javapgm.Preconditions.checkNotNull;
 
 import java.io.IOException;
@@ -289,6 +290,19 @@ public class Socket {
                 
                 LOG.debug ("PGM socket successfully bound.");
                 return true;
+        }
+
+/* Timeout for pending timer */        
+        public long getTimeRemain() {
+                checkArgument (this.isConnected);
+                long usecs = timerExpiration();
+                return usecs;
+        }
+        
+/* Timeout for rate limited IO */        
+        public long getRateRemain() {
+                checkArgument (false);
+                return 0;
         }
         
         public boolean setOption (int optname, Object optval) throws java.net.SocketException, IOException {
@@ -866,6 +880,15 @@ LOG.info ("flushPeersPending");
 LOG.info ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
 		return hasExpired;
 	}
+        
+/* Return next timer expiration in milliseconds for Java, not microseconds per C.
+ */        
+        private long timerExpiration()
+        {
+                final long now = System.currentTimeMillis();
+                final long expiration = this.nextPoll > now ? (this.nextPoll - now) : 0;
+                return expiration;
+        }
 
 	private boolean timerDispatch()
 	{

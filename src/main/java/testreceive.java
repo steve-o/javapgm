@@ -100,36 +100,38 @@ public class testreceive {
 
 		Selector selector = Selector.open();
                 SelectionKey sk = this.sock.register (selector, SelectionKey.OP_READ);
+                long timeout = 0;
 		while (true) {
-			final int keyCount = selector.select (1000);
-			if (keyCount > 0) {
-				selector.selectedKeys().clear();
-
-				final List<SocketBuffer> skbs = new ArrayList<>();
-				final hk.miru.javapgm.Socket.IoStatus status = this.sock.receive (skbs);
-				switch (status) {
-				case IO_STATUS_NORMAL:
-					on_data (skbs);
-					break;
-				case IO_STATUS_TIMER_PENDING:
-					System.out.println ("timer pending ...");
-					break;
-				case IO_STATUS_RATE_LIMITED:
-					System.out.println ("rate limited ...");
-					break;
-				case IO_STATUS_WOULD_BLOCK:
-					System.out.println ("would block.");
-					break;
-				default:
-					System.err.format ("unhandled return state: %s%n", status);
-					break;
-				}
+                        final List<SocketBuffer> skbs = new ArrayList<>();
+			final hk.miru.javapgm.Socket.IoStatus status = this.sock.receive (skbs);
+			switch (status) {
+			case IO_STATUS_NORMAL:
+                                on_data (skbs);
+				break;
+			case IO_STATUS_TIMER_PENDING:
+                                timeout = this.sock.getTimeRemain();
+/* Workaround lack of functional goto in Java */                                    
+			case IO_STATUS_RATE_LIMITED:
+                                if (hk.miru.javapgm.Socket.IoStatus.IO_STATUS_RATE_LIMITED == status) {
+                                        timeout = this.sock.getRateRemain();
+                                }
+			case IO_STATUS_WOULD_BLOCK:
+                                if (hk.miru.javapgm.Socket.IoStatus.IO_STATUS_WOULD_BLOCK == status) {
+                                        timeout = 0;
+                                }
+                                if (selector.select (timeout) > 0) {
+                                        selector.selectedKeys().clear();
+                                }
+                                break;
+			default:
+				System.err.format ("unhandled return state: %s%n", status);
+				break;
 			}
 		}
 	}
 
 	private void on_data (List<SocketBuffer> skbs) {
-		System.out.format ("Received %d SKBs%n", skbs.size());
+		System.out.format ("Received %d SKB%s%n", skbs.size(), skbs.size() > 1 ? "s" : "");
 		int i = 1;
 		for (SocketBuffer skb : skbs) {
 			System.out.format ("#%d from %s: \"%s\"%n",
