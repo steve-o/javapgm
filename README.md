@@ -28,23 +28,19 @@ wireless adapter:
   ./daytime -lp 3056 -n "wlan0;239.192.0.1"
 ```
 
-Monitor the slightly verbose output.
+Monitor the output, configure Apache log4j2 for additional trace.
 ```
-  ...
-  onData
-  add ( "skb":  { "timestamp": 1367954156656, "tsi": "126.111.159.175.2.164.33465", "sequence": null, "len": 34, "header":  { "pgm_sport": 33465, "pgm_dport": 7500, "pgm_type": "PGM_ODATA", "pgm_options": "", "pgm_checksum": 0, "pgm_gsi": "126.111.159.175.2.164", "pgm_tsdu_length": 34 }, "odata": { "sourcePort": 33465, "destinationPort": 7500, "type": "PGM_ODATA", "options": 0, "checksum": 0x0, "gsi": "126.111.159.175.2.164", "tsduLength": 34, "dataSqn": 25, "dataTrail": 0, "dataData": "火, 07  5月 2013 15:15:56 -0400" }, "opt_fragment": null, "buf": { "head": 0, "data": 24, "tail": 58, "end": 58, "length": 58 } } )
-  defining window
-  SKB:25 trail:25 commit:25 lead:24 (RXW_TRAIL:25)
-  append
-  ReceiveWindow.add returned RXW_APPENDED
-  New pending data.
-  flushPeersPending
-  read
-  read #25
-  incomingRead
-  incomingReadApdu
+  Create PGM/UDP socket.
   Received 1 SKBs
-  #1 from 126.111.159.175.2.164.33465: "火, 07  5月 2013 15:15:56 -0400"
+  #1 from 79.4.63.168.226.140.136: "Thu, 23 May 2013 09:20:41 -0400"
+  timer pending ...
+  timer pending ...
+  timer pending ...
+  timer pending ...
+  timer pending ...
+  Received 1 SKBs
+  #1 from 79.4.63.168.226.140.136: "Thu, 23 May 2013 09:20:42 -0400"
+  timer pending ...
 
 ```
 
