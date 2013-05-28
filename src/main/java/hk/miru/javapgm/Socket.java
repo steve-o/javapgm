@@ -33,9 +33,10 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Random;
-import java.util.logging.Level;
+import java.util.TreeMap;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -57,15 +58,20 @@ public class Socket {
         boolean isReset = false;
 	boolean shouldAbortOnReset = false;
 
+        boolean canSendData = true;
         boolean canSendNak = true;
 	boolean canReceiveData = true;
         
         public static final int IP_MAX_MEMBERSHIPS = 20;
+        
+        public static final int UINT8_MAX = 0xff;
+        public static final int UINT16_MAX = 0xffff;
+        public static final int UINT32_MAX = 0xffff_ffff;
 
         hk.miru.javapgm.GroupSourceRequest send_gsr = null;
 	InetAddress send_addr = null;
 	MulticastSocket send_sock = null;
-        LinkedList<hk.miru.javapgm.GroupSourceRequest> recv_gsr = new LinkedList<>();
+        Map<hk.miru.javapgm.GroupSourceRequest, MembershipKey> recv_gsr = new TreeMap<>();
 	DatagramChannel recv_sock = null;
         
         int max_apdu = 0;
@@ -74,20 +80,32 @@ public class Socket {
         int max_tsdu_fragment = 0;
         int iphdr_len = 0;
         int hops = 0;
+        int txw_sqns = 0, txw_secs = 0;
         int rxw_sqns = 0, rxw_secs = 0;
-	long rxw_max_rte = 0;
+	long txw_max_rte = 0, rxw_max_rte = 0;
+        long odata_max_rte = 0;
+        long rdata_max_rte = 0;
 
+        TransmitWindow window = null;
+        RateControl rate_control = null;
+        RateControl odata_rate_control = null;
+        RateControl rdata_rate_control = null;
+        boolean has_controlled_spm = false;
+        boolean has_controlled_odata = false;
+        boolean has_controlled_rdata = false;
+        
         long lastCommit = 0;
         
-        Random rand = null;
-	long nak_data_retries = 0;
-	long nak_ncf_retries = 0;
-	long nak_bo_ivl = 0;
-	long nak_rpt_ivl = 0;
-        long nak_rdata_ivl = 0;
-
+        SequenceNumber spm_sqn = null;
+        int spm_ambient_interval = 0;
+        int[] spm_heartbeat_interval;
 	long peerExpiration = 0;
         long spmrExpiration = 0;
+        
+        Random rand = null;
+	long nak_data_retries = 0, nak_ncf_retries = 0;
+	long nak_bo_ivl = 0, nak_rpt_ivl = 0, nak_rdata_ivl = 0;
+        long next_heartbeat_spm = 0, next_ambient_spm = 0;
 
 	ByteBuffer buffer = null;
 	SocketBuffer rx_buffer = null;      
@@ -114,6 +132,7 @@ public class Socket {
 	public Socket (ProtocolFamily family) throws IOException
 	{
                 this.family = family;
+                this.canSendData = true;
                 this.canSendNak = true;
                 this.canReceiveData = true;
                 this.dataDestinationPort = Packet.DEFAULT_DATA_DESTINATION_PORT;
@@ -126,6 +145,408 @@ public class Socket {
 		this.send_sock = new MulticastSocket ();
         }
         
+/* Timeout for pending timer */        
+        public long getTimeRemain() {
+                checkArgument (this.isConnected);
+                long usecs = timerExpiration();
+                return usecs;
+        }
+        
+/* Timeout for rate limited IO */        
+        public long getRateRemain() {
+                checkArgument (false);
+                return 0;
+        }
+        
+        public boolean setOption (int optname, Object optval) throws java.net.SocketException, IOException {
+                if (this.isConnected || this.isDestroyed)
+                        return false;
+                
+                switch (optname) {
+                    
+/* RFC2113 IP Router Alert 
+ */
+                case SocketOptions.PGM_IP_ROUTER_ALERT:
+                        return false;
+                    
+/* IPv4:   68 <= tpdu < 65536           (RFC 2765)
+ * IPv6: 1280 <= tpdu < 65536           (RFC 2460)
+ */                    
+                case SocketOptions.PGM_MTU:
+                        checkArgument (optval instanceof Integer);
+                        checkArgument ((Integer)optval >= (Packet.SIZEOF_IP_HEADER + Packet.SIZEOF_PGM_HEADER));
+                        checkArgument ((Integer)optval <= UINT16_MAX);
+                        this.max_tpdu = ((Integer)optval).intValue();
+                        return true;
+                    
+/* true = enable multicast loopback.
+ * false = default, to disable.
+ */                    
+                case SocketOptions.PGM_MULTICAST_LOOP:
+                        checkArgument (optval instanceof Boolean);
+                        this.send_sock.setLoopbackMode (((Boolean)optval).booleanValue());
+                        this.recv_sock.setOption (StandardSocketOptions.IP_MULTICAST_LOOP, ((Boolean)optval).booleanValue());
+                        return true;
+                    
+/* 0 < hops < 256, hops == -1 use kernel default (ignored).
+ */
+                case SocketOptions.PGM_MULTICAST_HOPS:                    
+                        checkArgument (optval instanceof Integer);
+                        checkArgument ((Integer)optval > 0);
+                        checkArgument ((Integer)optval <= UINT8_MAX);
+                        this.hops = ((Integer)optval).intValue();
+                        this.send_sock.setTimeToLive (hops);
+                        return true;
+
+/* IP Type of Service (ToS) or RFC 3246, differentiated services (DSCP)
+ */
+                case SocketOptions.PGM_TOS:
+                        return false;
+                    
+/* Periodic ambient broadcast SPM interval in milliseconds.
+ */
+                case SocketOptions.PGM_AMBIENT_SPM:
+                        checkArgument (optval instanceof Integer);
+                        checkArgument ((Integer)optval > 0);
+                        this.spm_ambient_interval = ((Integer)optval).intValue();
+                        return true;
+                    
+/* Sequence of heartbeat broadcast SPMS to flush out original 
+ */
+                case SocketOptions.PGM_HEARTBEAT_SPM:
+                        this.spm_heartbeat_interval = Ints.toArray ((List<Integer>)optval);
+                        return true;
+                    
+/* Size of transmit window in sequence numbers.
+ * 0 < txw_sqns < one less than half sequence space
+ */
+                case SocketOptions.PGM_TXW_SQNS:
+                        checkArgument (optval instanceof Integer);
+                        checkArgument ((Integer)optval > 0);
+                        checkArgument ((Integer)optval < ((UINT32_MAX/2)-1));
+                        this.txw_sqns = ((Integer)optval).intValue();
+                        return true;
+                    
+/* Size of transmit window in seconds.
+ * 0 < secs < ( txw_sqns / txw_max_rte )
+ */
+                case SocketOptions.PGM_TXW_SECS:
+                        checkArgument (optval instanceof Integer);
+                        checkArgument ((Integer)optval > 0);
+                        this.txw_secs = ((Integer)optval).intValue();
+                        return true;
+                    
+/* Maximum transmit rate.
+ * 0 < txw_max_rte < interface capacity
+ *  10mb :   1250000
+ * 100mb :  12500000
+ *   1gb : 125000000
+ */
+                case SocketOptions.PGM_TXW_MAX_RTE:
+                        checkArgument (optval instanceof Integer);
+                        checkArgument ((Integer)optval > 0);
+                        this.txw_max_rte = ((Integer)optval).intValue();
+/* Default to controlling SPM, ODATA, and RDATA packets. */
+                        this.has_controlled_odata = true;
+                        this.has_controlled_rdata = true;
+                        return true;
+
+/* Maximum original data rate.
+ * 0 < odata_max_rte < txw_max_rte
+ */
+                case SocketOptions.PGM_ODATA_MAX_RTE:
+                        checkArgument (optval instanceof Integer);
+                        checkArgument ((Integer)optval > 0);
+                        this.odata_max_rte = ((Integer)optval).intValue();
+                        return true;
+                    
+/* Maximum repair data rate.
+ * 0 < rdata_max_rte < txw_max_rte
+ */ 
+                case SocketOptions.PGM_RDATA_MAX_RTE:
+                        checkArgument (optval instanceof Integer);
+                        checkArgument ((Integer)optval > 0);
+                        this.rdata_max_rte = ((Integer)optval).intValue();
+                        return true;
+                    
+/* Ignore rate limit for original data packets, i.e. only apply to repairs.
+ */
+                case SocketOptions.PGM_UNCONTROLLED_ODATA:
+                        checkArgument (optval instanceof Boolean);
+                        this.has_controlled_odata = !(((Boolean)optval).booleanValue());
+                        return true;
+                    
+/* Ignore rate limit for repair data packets, i.e. only apply to original data.
+ */
+                case SocketOptions.PGM_UNCONTROLLED_RDATA:
+                        checkArgument (optval instanceof Boolean);
+                        this.has_controlled_rdata = !(((Boolean)optval).booleanValue());
+                        return true;
+                    
+/* Timeout for peers.
+ * 0 < 2 * spm_ambient_interval <= peer_expiry
+ */                    
+                case SocketOptions.PGM_PEER_EXPIRY:
+                        checkArgument (optval instanceof Integer);
+                        this.peerExpiration = (((Integer)optval).intValue());
+                        return true;
+
+/* Maximum back off range for listening for multicast SPMR.
+ * 0 < spmr_expiry < spm_ambient_interval
+ */                    
+                case SocketOptions.PGM_SPMR_EXPIRY:
+                        checkArgument (optval instanceof Integer);
+                        this.spmrExpiration = (((Integer)optval).intValue());
+                        return true;
+
+/* Size of receive window in sequence numbers.
+ * 0 < rxw_sqns < one less than half sequence space
+ */                    
+                case SocketOptions.PGM_RXW_SQNS:
+                        checkArgument (optval instanceof Integer);
+                        this.rxw_sqns = (((Integer)optval).intValue());
+                        return true;
+
+/* Size of receive window in seconds.
+ * 0 < secs < ( rxw_sqns / rxw_max_rte )
+ */ 
+                case SocketOptions.PGM_RXW_SECS:
+                        checkArgument (optval instanceof Integer);
+                        this.rxw_secs = (((Integer)optval).intValue());
+                        return true;
+                    
+/* Maximum receive rate, for determining window size with txw_secs.
+ * 0 < rxw_max_rte < interface capacity
+ */
+                case SocketOptions.PGM_RXW_MAX_RTE:
+                        checkArgument (optval instanceof Integer);
+                        this.rxw_max_rte = (((Integer)optval).intValue());
+                        return true;
+
+/* Maximum NAK back-off value nak_rb_ivl in milliseconds.
+ * 0 < nak_rb_ivl <= nak_bo_ivl
+ */                    
+                case SocketOptions.PGM_NAK_BO_IVL:
+                        checkArgument (optval instanceof Integer);
+                        this.nak_bo_ivl = (((Integer)optval).intValue());
+                        return true;
+
+/* Repeat interval prior to re-sending a NAK, in milliseconds.
+ */                    
+                case SocketOptions.PGM_NAK_RPT_IVL:
+                        checkArgument (optval instanceof Integer);
+                        this.nak_rpt_ivl = (((Integer)optval).intValue());
+                        return true;
+
+/* Interval waiting for repair data, in milliseconds.
+ */                    
+                case SocketOptions.PGM_NAK_RDATA_IVL:
+                        checkArgument (optval instanceof Integer);
+                        this.nak_rdata_ivl = (((Integer)optval).intValue());
+                        return true;
+                    
+/* Limit for data.
+ * 0 < nak_data_retries < 256
+ */                    
+                case SocketOptions.PGM_NAK_DATA_RETRIES:
+                        checkArgument (optval instanceof Integer);
+                        this.nak_data_retries = (((Integer)optval).intValue());
+                        return true;
+                    
+/* Limit for NAK confirms.
+ * 0 < nak_ncf_retries < 256
+ */                    
+                case SocketOptions.PGM_NAK_NCF_RETRIES:
+                        checkArgument (optval instanceof Integer);
+                        this.nak_ncf_retries = (((Integer)optval).intValue());
+                        return true;
+
+/* Enable FEC for this sock, specifically Reed Solmon encoding RS(n,k), common
+ * setting is RS(255, 223).
+ *
+ * Inputs:
+ *
+ * n = FEC Block size = [k+1, 255]
+ * k = original data packets == transmission group size = [2, 4, 8, 16, 32, 64, 128]
+ * m = symbol size = 8 bits
+ *
+ * Outputs:
+ *
+ * h = 2t = n - k = parity packets
+ *
+ * When h > k parity packets can be lost.
+ */
+                case SocketOptions.PGM_USE_FEC:
+                        return false;
+
+/* Congestion reporting */
+                case SocketOptions.PGM_USE_CR:
+                        return false;
+                    
+/* Congestion control */
+                case SocketOptions.PGM_USE_PGMCC:
+                        return false;
+                    
+/* Declare socket only for sending, discard any incoming SPM, ODATA,
+ * RDATA, etc, packets.
+ */
+                case SocketOptions.PGM_SEND_ONLY:
+                        checkArgument (optval instanceof Boolean);
+                        this.canReceiveData = !(((Boolean)optval).booleanValue());
+                        return true;
+                    
+/* Declare socket only for receiving, no transmit window will be created
+ * and no SPM broadcasts sent.
+ */
+                case SocketOptions.PGM_RECV_ONLY:
+                        checkArgument (optval instanceof Boolean);
+                        this.canSendData = !(((Boolean)optval).booleanValue());
+                        return true;
+                    
+/* Passive receiving socket, i.e. no back channel to source
+ */                    
+                case SocketOptions.PGM_PASSIVE:
+                        checkArgument (optval instanceof Boolean);
+                        this.canSendNak = !(((Boolean)optval).booleanValue());
+                        return true;
+                    
+/* On unrecoverable data loss stop socket from further transmission and
+ * receiving.
+ */                    
+                case SocketOptions.PGM_ABORT_ON_RESET:
+                        checkArgument (optval instanceof Boolean);
+                        this.shouldAbortOnReset = !(((Boolean)optval).booleanValue());
+                        return true;
+                    
+/* Default non-blocking operation on send and receive sockets.
+ */
+                case SocketOptions.PGM_NOBLOCK:
+                        return false;
+                    
+/* Sending group, singular.  Note that the address is only stored and used
+ * later in sendto() calls, this routine only considers the interface.
+ */                    
+                case SocketOptions.PGM_SEND_GROUP:
+                        checkArgument (optval instanceof hk.miru.javapgm.GroupRequest);
+                        {
+                                hk.miru.javapgm.GroupRequest gr = (hk.miru.javapgm.GroupRequest)optval;
+                                this.send_gsr = new hk.miru.javapgm.GroupSourceRequest (gr.getNetworkInterfaceIndex(), gr.getMulticastAddress(), null);
+                                int if_index = gr.getNetworkInterfaceIndex();
+                                this.send_sock.setNetworkInterface (NetworkInterface.getByIndex (if_index));
+                                LOG.info ("Multicast send interface set to index {}", gr.getNetworkInterfaceIndex());
+                        }
+                        return true;
+                    
+/* For any-source applications (ASM), join a new group
+ */                    
+                case SocketOptions.PGM_JOIN_GROUP:
+                        checkArgument (optval instanceof hk.miru.javapgm.GroupRequest);
+                        {
+                                hk.miru.javapgm.GroupRequest gr = (hk.miru.javapgm.GroupRequest)optval;
+                                hk.miru.javapgm.GroupSourceRequest gsr = new hk.miru.javapgm.GroupSourceRequest (gr.getNetworkInterfaceIndex(), gr.getMulticastAddress(), null);
+                                MembershipKey key = this.recv_sock.join (gr.getMulticastAddress(), NetworkInterface.getByIndex (gr.getNetworkInterfaceIndex()));
+                                this.recv_gsr.put (gsr, key);
+                                LOG.info ("Join multicast group {} on interface index {}", gr.getMulticastAddress(), gr.getNetworkInterfaceIndex());
+                        }
+                        return true;
+
+/* For any-source applications (ASM), leave a joined group.
+ */                    
+                case SocketOptions.PGM_LEAVE_GROUP:
+                        checkArgument (optval instanceof hk.miru.javapgm.GroupRequest);
+                        {
+                                hk.miru.javapgm.GroupRequest gr = (hk.miru.javapgm.GroupRequest)optval;
+                                hk.miru.javapgm.GroupSourceRequest gsr = new hk.miru.javapgm.GroupSourceRequest (gr.getNetworkInterfaceIndex(), gr.getMulticastAddress(), null);
+                                MembershipKey key = this.recv_gsr.get (gsr);
+                                key.drop();
+                                this.recv_gsr.remove (gsr);
+                        }
+                        return false;
+                    
+/* For any-source applications (ASM), turn off a given source
+ */ 
+                case SocketOptions.PGM_BLOCK_SOURCE:
+                        checkArgument (optval instanceof hk.miru.javapgm.GroupSourceRequest);
+                        {
+                                hk.miru.javapgm.GroupSourceRequest gsr = (hk.miru.javapgm.GroupSourceRequest)optval;
+                                hk.miru.javapgm.GroupSourceRequest search_gsr = new hk.miru.javapgm.GroupSourceRequest (gsr.getNetworkInterfaceIndex(), gsr.getMulticastAddress(), null);
+                                MembershipKey key = this.recv_gsr.get (search_gsr);
+                                key.block (gsr.getSourceAddress());
+                        }
+                        return false;
+                    
+/* For any-source applications (ASM), re-allow a blocked source
+ */ 
+                case SocketOptions.PGM_UNBLOCK_SOURCE:
+                        checkArgument (optval instanceof hk.miru.javapgm.GroupSourceRequest);
+                        {
+                                hk.miru.javapgm.GroupSourceRequest gsr = (hk.miru.javapgm.GroupSourceRequest)optval;
+                                hk.miru.javapgm.GroupSourceRequest search_gsr = new hk.miru.javapgm.GroupSourceRequest (gsr.getNetworkInterfaceIndex(), gsr.getMulticastAddress(), null);
+                                MembershipKey key = this.recv_gsr.get (search_gsr);
+                                key.unblock (gsr.getSourceAddress());
+                        }
+                        return false;
+                    
+/* For controlled-source applications (SSM), join each group/source pair.
+ *
+ * SSM joins are allowed on top of ASM in order to merge a remote source onto the local segment.
+ */                    
+                case SocketOptions.PGM_JOIN_SOURCE_GROUP:
+                        checkArgument (optval instanceof hk.miru.javapgm.GroupSourceRequest);
+                        {
+                                hk.miru.javapgm.GroupSourceRequest gsr = (hk.miru.javapgm.GroupSourceRequest)optval;
+                                MembershipKey key = this.recv_sock.join (gsr.getMulticastAddress(), NetworkInterface.getByIndex (gsr.getNetworkInterfaceIndex()), gsr.getSourceAddress());
+                                LOG.info ("Join multicast group {} on interface index {} for source {}",
+                                          gsr.getMulticastAddress(), gsr.getNetworkInterfaceIndex(), gsr.getSourceAddress());
+                                this.recv_gsr.put (gsr, key);
+                        }
+                        return true;
+                    
+/* For controlled-source applications (SSM), leave each group/source pair
+ */                    
+                case SocketOptions.PGM_LEAVE_SOURCE_GROUP:
+                        checkArgument (optval instanceof hk.miru.javapgm.GroupSourceRequest);
+                        {
+                                hk.miru.javapgm.GroupSourceRequest gsr = (hk.miru.javapgm.GroupSourceRequest)optval;
+                                MembershipKey key = this.recv_gsr.get (gsr);
+                                key.drop();
+                                this.recv_gsr.remove (gsr);
+                        }
+                        return false;
+
+/* batch block and unblock sources */                    
+                case SocketOptions.PGM_MSFILTER:
+                        return false;
+
+/* UDP encapsulation ports */                    
+                case SocketOptions.PGM_UDP_ENCAP_UCAST_PORT:
+                        checkArgument (optval instanceof Integer);
+                        this.udpEncapsulationUnicastPort = (((Integer)optval).intValue());
+                        return true;
+
+                case SocketOptions.PGM_UDP_ENCAP_MCAST_PORT:
+                        checkArgument (optval instanceof Integer);
+                        this.udpEncapsulationMulticastPort = (((Integer)optval).intValue());
+                        return true;
+
+/** Read-only options **/
+                case SocketOptions.PGM_MSSS:
+                case SocketOptions.PGM_MSS:
+                case SocketOptions.PGM_PDU:
+                case SocketOptions.PGM_SEND_SOCK:
+                case SocketOptions.PGM_RECV_SOCK:
+                case SocketOptions.PGM_REPAIR_SOCK:
+                case SocketOptions.PGM_PENDING_SOCK:
+                case SocketOptions.PGM_ACK_SOCK:
+                case SocketOptions.PGM_TIME_REMAIN:
+                case SocketOptions.PGM_RATE_REMAIN:                    
+                default:
+                        break;
+                }
+                
+                return false;
+        }
+
         public boolean bind (hk.miru.javapgm.SocketAddress sockaddr, @Nullable InterfaceRequest send_req, @Nullable InterfaceRequest recv_req)
         {
                 checkNotNull (sockaddr);
@@ -136,6 +557,20 @@ public class Socket {
 /* Sanity checks on state */
                 if (this.max_tpdu < (Packet.SIZEOF_IP_HEADER + Packet.SIZEOF_PGM_HEADER)) {
                         return false;
+                }
+                if (this.canSendData) {
+                        if (0 == this.spm_ambient_interval) {
+                                return false;
+                        }
+                        if (0 == this.spm_heartbeat_interval.length) {
+                                return false;
+                        }
+                        if (0 == this.txw_sqns && 0 == this.txw_secs) {
+                                return false;
+                        }
+                        if (0 == this.txw_sqns && 0 == this.txw_max_rte) {
+                                return false;
+                        }
                 }
                 if (this.canReceiveData) {
                         if (0 == this.rxw_sqns && 0 == this.rxw_secs) {
@@ -187,6 +622,22 @@ public class Socket {
                 this.max_tsdu_fragment = this.max_tpdu - this.iphdr_len - Packet.calculateOffset (true, pgmcc_family);
                 int max_fragments = Packet.PGM_MAX_FRAGMENTS;
                 this.max_apdu = Math.min (Packet.PGM_MAX_APDU, max_fragments * this.max_tsdu_fragment);
+                
+                if (this.canSendData) {
+                        LOG.info ("Create transmit window.");
+                        this.window = this.txw_sqns > 0 ?
+                                        new TransmitWindow (this.tsi,
+                                                            0,
+                                                            this.txw_sqns,
+                                                            0,
+                                                            0) :
+                                        new TransmitWindow (this.tsi,
+                                                            this.max_tpdu,
+                                                            0,
+                                                            this.txw_secs,
+                                                            this.txw_max_rte);
+                        assert (null != this.window);
+                }
                 
 /* Create peer list */
                 if (this.canReceiveData) {
@@ -282,6 +733,28 @@ public class Socket {
 /* Save send side address for broadcasting as source NLA */
                 this.send_addr = send_addr.getAddress();
                 
+                if (this.canSendData) {
+/* Setup rate control */
+                        if (this.txw_max_rte > 0) {
+                                LOG.info ("Setting rate regulation to {} bytes per second.", this.txw_max_rte);
+                                this.rate_control = new RateControl (this.txw_max_rte, this.iphdr_len, this.max_tpdu);
+                                this.has_controlled_spm = true;     /* Must always be set */
+                        } else {
+                                this.has_controlled_spm = false;
+                        }
+
+                        if (this.odata_max_rte > 0) {
+                                LOG.info ("Setting ODATA rate regulation to {} bytes per second", this.odata_max_rte);
+                                this.odata_rate_control = new RateControl (this.odata_max_rte, this.iphdr_len, this.max_tpdu);
+                                this.has_controlled_odata = true;
+                        }
+                        if (this.rdata_max_rte > 0) {
+                                LOG.info ("Setting RDATA rate regulation to {} bytes per second", this.rdata_max_rte);
+                                this.rdata_rate_control = new RateControl (this.rdata_max_rte, this.iphdr_len, this.max_tpdu);
+                                this.has_controlled_rdata = true;
+                        }
+                }
+                
 /* Allocate first incoming packet buffer */                
 		this.buffer = ByteBuffer.allocateDirect (this.max_tpdu);
 
@@ -291,250 +764,6 @@ public class Socket {
                 LOG.debug ("PGM socket successfully bound.");
                 return true;
         }
-
-/* Timeout for pending timer */        
-        public long getTimeRemain() {
-                checkArgument (this.isConnected);
-                long usecs = timerExpiration();
-                return usecs;
-        }
-        
-/* Timeout for rate limited IO */        
-        public long getRateRemain() {
-                checkArgument (false);
-                return 0;
-        }
-        
-        public boolean setOption (int optname, Object optval) throws java.net.SocketException, IOException {
-                if (this.isConnected || this.isDestroyed)
-                        return false;
-                
-                switch (optname) {
-                    
-/* IPv4:   68 <= tpdu < 65536           (RFC 2765)
- * IPv6: 1280 <= tpdu < 65536           (RFC 2460)
- */                    
-                case SocketOptions.PGM_MTU:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.max_tpdu = ((Integer)optval).intValue();
-                        return true;
-                    
-/* true = enable multicast loopback.
- * false = default, to disable.
- */                    
-                case SocketOptions.PGM_MULTICAST_LOOP:
-                        if (!(optval instanceof Boolean))
-                                break;
-                        this.send_sock.setLoopbackMode (((Boolean)optval).booleanValue());
-                        this.recv_sock.setOption (StandardSocketOptions.IP_MULTICAST_LOOP, ((Boolean)optval).booleanValue());
-                        return true;
-                    
-/* 0 < hops < 256, hops == -1 use kernel default (ignored).
- */
-                case SocketOptions.PGM_MULTICAST_HOPS:                    
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.hops = ((Integer)optval).intValue();
-                        this.send_sock.setTimeToLive (hops);
-                        return true;
-                    
-/* Timeout for peers.
- * 0 < 2 * spm_ambient_interval <= peer_expiry
- */                    
-                case SocketOptions.PGM_PEER_EXPIRY:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.peerExpiration = (((Integer)optval).intValue());
-                        return true;
-
-/* Maximum back off range for listening for multicast SPMR.
- * 0 < spmr_expiry < spm_ambient_interval
- */                    
-                case SocketOptions.PGM_SPMR_EXPIRY:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.spmrExpiration = (((Integer)optval).intValue());
-                        return true;
-
-/* Size of receive window in sequence numbers.
- * 0 < rxw_sqns < one less than half sequence space
- */                    
-                case SocketOptions.PGM_RXW_SQNS:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.rxw_sqns = (((Integer)optval).intValue());
-                        return true;
-
-/* Size of receive window in seconds.
- * 0 < secs < ( rxw_sqns / rxw_max_rte )
- */ 
-                case SocketOptions.PGM_RXW_SECS:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.rxw_secs = (((Integer)optval).intValue());
-                        return true;
-                    
-/* Maximum receive rate, for determining window size with txw_secs.
- * 0 < rxw_max_rte < interface capacity
- */
-                case SocketOptions.PGM_RXW_MAX_RTE:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.rxw_max_rte = (((Integer)optval).intValue());
-                        return true;
-
-/* Maximum NAK back-off value nak_rb_ivl in milliseconds.
- * 0 < nak_rb_ivl <= nak_bo_ivl
- */                    
-                case SocketOptions.PGM_NAK_BO_IVL:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.nak_bo_ivl = (((Integer)optval).intValue());
-                        return true;
-
-/* Repeat interval prior to re-sending a NAK, in milliseconds.
- */                    
-                case SocketOptions.PGM_NAK_RPT_IVL:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.nak_rpt_ivl = (((Integer)optval).intValue());
-                        return true;
-
-/* Interval waiting for repair data, in milliseconds.
- */                    
-                case SocketOptions.PGM_NAK_RDATA_IVL:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.nak_rdata_ivl = (((Integer)optval).intValue());
-                        return true;
-                    
-/* Limit for data.
- * 0 < nak_data_retries < 256
- */                    
-                case SocketOptions.PGM_NAK_DATA_RETRIES:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.nak_data_retries = (((Integer)optval).intValue());
-                        return true;
-                    
-/* Limit for NAK confirms.
- * 0 < nak_ncf_retries < 256
- */                    
-                case SocketOptions.PGM_NAK_NCF_RETRIES:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.nak_ncf_retries = (((Integer)optval).intValue());
-                        return true;
-                    
-/* Passive receiving socket, i.e. no back channel to source
- */                    
-                case SocketOptions.PGM_PASSIVE:
-                        if (!(optval instanceof Boolean))
-                                break;
-                        this.canSendNak = !(((Boolean)optval).booleanValue());
-                        return true;
-                    
-/* On unrecoverable data loss stop socket from further transmission and
- * receiving.
- */                    
-                case SocketOptions.PGM_ABORT_ON_RESET:
-                        if (!(optval instanceof Boolean))
-                                break;
-                        this.shouldAbortOnReset = !(((Boolean)optval).booleanValue());
-                        return true;
-                    
-/* Sending group, singular.  Note that the address is only stored and used
- * later in sendto() calls, this routine only considers the interface.
- */                    
-                case SocketOptions.PGM_SEND_GROUP:
-                        if (!(optval instanceof hk.miru.javapgm.GroupRequest))
-                                break;
-                        {
-                                hk.miru.javapgm.GroupRequest gr = (hk.miru.javapgm.GroupRequest)optval;
-                                this.send_gsr = new hk.miru.javapgm.GroupSourceRequest (gr.getNetworkInterfaceIndex(), gr.getMulticastAddress(), null);
-                                int if_index = gr.getNetworkInterfaceIndex();
-                                this.send_sock.setNetworkInterface (NetworkInterface.getByIndex (if_index));
-                                LOG.info ("Multicast send interface set to index {}", gr.getNetworkInterfaceIndex());
-                        }
-                        return true;
-                    
-/* For any-source applications (ASM), join a new group
- */                    
-                case SocketOptions.PGM_JOIN_GROUP:
-                        if (!(optval instanceof hk.miru.javapgm.GroupRequest))
-                                break;
-                        {
-                                hk.miru.javapgm.GroupRequest gr = (hk.miru.javapgm.GroupRequest)optval;
-                                hk.miru.javapgm.GroupSourceRequest gsr = new hk.miru.javapgm.GroupSourceRequest (gr.getNetworkInterfaceIndex(), gr.getMulticastAddress(), null);
-                                this.recv_gsr.add (gsr);
-                                MembershipKey key = this.recv_sock.join (gr.getMulticastAddress(), NetworkInterface.getByIndex (gr.getNetworkInterfaceIndex()));
-                                LOG.info ("Join multicast group {} on interface index {}", gr.getMulticastAddress(), gr.getNetworkInterfaceIndex());
-                        }
-                        return true;
-
-/* For any-source applications (ASM), leave a joined group.
- */                    
-                case SocketOptions.PGM_LEAVE_GROUP:
-                        // key.drop();
-                        return false;
-                    
-/* For any-source applications (ASM), turn off a given source
- */ 
-                case SocketOptions.PGM_BLOCK_SOURCE:
-                        // key.block (source);
-                        return false;
-                    
-/* For any-source applications (ASM), re-allow a blocked source
- */ 
-                case SocketOptions.PGM_UNBLOCK_SOURCE:
-                        // key.unblock (source);
-                        return false;
-                    
-/* For controlled-source applications (SSM), join each group/source pair.
- *
- * SSM joins are allowed on top of ASM in order to merge a remote source onto the local segment.
- */                    
-                case SocketOptions.PGM_JOIN_SOURCE_GROUP:
-                        if (!(optval instanceof hk.miru.javapgm.GroupSourceRequest))
-                                break;
-                        {
-                                hk.miru.javapgm.GroupSourceRequest gsr = (hk.miru.javapgm.GroupSourceRequest)optval;
-                                MembershipKey key = this.recv_sock.join (gsr.getMulticastAddress(), NetworkInterface.getByIndex (gsr.getNetworkInterfaceIndex()), gsr.getSourceAddress());
-                                LOG.info ("Join multicast group {} on interface index {} for source {}",
-                                          gsr.getMulticastAddress(), gsr.getNetworkInterfaceIndex(), gsr.getSourceAddress());
-                        }
-                        return true;
-                    
-/* For controlled-source applications (SSM), leave each group/source pair
- */                    
-                case SocketOptions.PGM_LEAVE_SOURCE_GROUP:
-                        // key.drop();
-                        return false;
-
-/* batch block and unblock sources */                    
-                case SocketOptions.PGM_MSFILTER:
-                        return false;
-
-/* UDP encapsulation ports */                    
-                case SocketOptions.PGM_UDP_ENCAP_UCAST_PORT:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.udpEncapsulationUnicastPort = (((Integer)optval).intValue());
-                        return true;
-
-                case SocketOptions.PGM_UDP_ENCAP_MCAST_PORT:
-                        if (!(optval instanceof Integer))
-                                break;
-                        this.udpEncapsulationMulticastPort = (((Integer)optval).intValue());
-                        return true;
-                    
-                default:
-                        break;
-                }
-                
-                return false;
-        }
         
         public boolean connect() {
                 if (this.isConnected || !this.isBound || this.isDestroyed) {
@@ -543,6 +772,20 @@ public class Socket {
                     
                 LOG.debug ("connect ()");
 
+                if (this.canSendData)
+                {
+/* Announce new sock by sending out SPMs */
+                        if (!this.sendSpm (Packet.PGM_OPT_SYN) ||
+                            !this.sendSpm (Packet.PGM_OPT_SYN) ||
+                            !this.sendSpm (Packet.PGM_OPT_SYN))
+                        {
+                                LOG.error ("Sending SPM broadcast");
+                                return false;
+                        }
+                        
+                        this.nextPoll = this.next_ambient_spm = System.currentTimeMillis() + this.spm_ambient_interval;
+                }
+                else
                 {
                         this.nextPoll = System.currentTimeMillis() + (30 * 1000);
                 }
@@ -601,7 +844,7 @@ if (false && (Math.random() < 0.25)) {
 				if (!Packet.parseUdpEncapsulated (this.rx_buffer))
 					break;
 				this.source[0] = null;
-				if (!onPgm (this.rx_buffer, src.getAddress(), this.recv_gsr.getFirst().getMulticastAddress(), this.source))
+				if (!onPgm (this.rx_buffer, src.getAddress(), this.recv_gsr.keySet().iterator().next().getMulticastAddress(), this.source))
 					break;
 /* check whether this source has waiting data */
 				if (null != this.source[0] && this.source[0].hasPending()) {
@@ -1290,7 +1533,7 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 							 this.udpEncapsulationMulticastPort);
                 try {                            
                         this.send_sock.setTimeToLive (1);
-                        for (GroupSourceRequest gsr : this.recv_gsr) {
+                        for (GroupSourceRequest gsr : this.recv_gsr.keySet()) {
                                 pkt.setAddress (gsr.getMulticastAddress());
 /* Ignore errors on peer multicast */
                                 this.send_sock.send (pkt);
@@ -1309,6 +1552,43 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 return true;
 	}
 
+        private boolean sendSpm (int flags)
+        {
+                LOG.info ("sendSpm");
+
+                SocketBuffer skb = SourcePathMessage.create (this.family, flags);
+                Header header = skb.getHeader();
+                SourcePathMessage spm = new SourcePathMessage (skb, skb.getDataOffset());
+		header.setGlobalSourceId (this.tsi.getGlobalSourceId());
+                header.setSourcePort (this.tsi.getSourcePort());
+                header.setDestinationPort (this.dataDestinationPort);
+                
+/* SPM */
+                spm.setSpmSequenceNumber (this.spm_sqn);
+                spm.setSpmTrail (this.window.getTrail());
+                spm.setSpmLead (this.window.getLead());
+/* Our NLA */
+                spm.setSpmNla (this.send_addr);
+                
+/* Checksum optional for SPMs */                
+		header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
+
+		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
+							 0,
+							 skb.getRawBytes().length,
+							 this.send_gsr.getMulticastAddress(),
+							 this.udpEncapsulationMulticastPort);
+		try {
+			this.send_sock.send (pkt);
+		} catch (java.io.IOException e) {
+			LOG.error (e.toString());
+			return false;
+		}               
+/* Advance SPM sequence only on successful transmission */
+                this.spm_sqn.plus (1);
+                return true;
+        }
+        
 	private boolean sendNak (Peer peer, SequenceNumber sequence)
 	{
 		LOG.info ("sendNak");

@@ -6,6 +6,7 @@ import static hk.miru.javapgm.Preconditions.checkArgument;
 import static hk.miru.javapgm.Preconditions.checkNotNull;
 
 import java.net.Socket;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nullable;
 
@@ -26,15 +27,17 @@ public class SocketBuffer {
 	private OriginalData		_odata = null;
 	private OptionFragment		_opt_fragment = null;
 
-	private byte[]			_buf	= null;
+	private byte[]			_buf = null;
 
-	private int			_head	= 0;
-	private int			_data	= 0;
-	private int			_tail	= 0;
-	private int			_end	= 0;
+	private int			_head = 0;
+	private int			_data = 0;
+	private int			_tail = 0;
+	private int			_end = 0;        
+        private AtomicInteger           _users = new AtomicInteger (0);
 	
 	public SocketBuffer (int size) {
 		this._buf = new byte[size];
+                this._users.lazySet (1);
 		this._head = 0;
 		this._data = this._tail = this._head;
 		this._end  = size;
@@ -65,6 +68,10 @@ public class SocketBuffer {
                 checkNotNull (sequence);
 		this._sequence = sequence;
 	}
+        
+        public int getUsers() {
+                return this._users.get();
+        }
 
 	@Override
 	public boolean equals (@Nullable Object obj) {

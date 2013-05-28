@@ -49,6 +49,7 @@ public class pgmrecv {
                 this.sock.setOption (hk.miru.javapgm.SocketOptions.PGM_UDP_ENCAP_MCAST_PORT, new Integer (this.udpEncapsulationPort));
                 
 /* Set PGM parameters */                
+                this.sock.setOption (hk.miru.javapgm.SocketOptions.PGM_RECV_ONLY, new Boolean (true));
                 this.sock.setOption (hk.miru.javapgm.SocketOptions.PGM_PASSIVE, new Boolean (false));
                 this.sock.setOption (hk.miru.javapgm.SocketOptions.PGM_MTU, new Integer (this.max_tpdu));
                 this.sock.setOption (hk.miru.javapgm.SocketOptions.PGM_RXW_SQNS, new Integer (this.rxw_sqns));

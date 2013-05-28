@@ -80,7 +80,7 @@ public class pgmsend {
                 }
 
                 for (String arg : args) {
-                        final hk.miru.javapgm.Socket.IoStatus status = this.sock.send (arg.getBytes(), arg.getBytes().length);
+//                        final hk.miru.javapgm.Socket.IoStatus status = this.sock.send (arg.getBytes(), arg.getBytes().length);
                         if (hk.miru.javapgm.Socket.IoStatus.IO_STATUS_NORMAL != status) {
                                 System.err.println ("PGM send failed.");
                         }

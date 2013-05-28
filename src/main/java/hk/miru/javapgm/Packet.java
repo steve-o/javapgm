@@ -16,8 +16,8 @@ public class Packet {
         private static Logger LOG = LogManager.getLogger (Packet.class.getName());
     
 /* address family indicator, rfc 1700 (ADDRESS FAMILY NUMBERS) */        
-	public static final int AFI_IP	= 1;
-	public static final int AFI_IP6	= 2;
+	public static final int AFI_IP	= 1;    /* IP (IP version 4) */
+	public static final int AFI_IP6	= 2;    /* IP6 (IP version 6) */
 
 /* UDP ports for UDP encapsulation, as per IBM WebSphere MQ */
 	public static final int DEFAULT_UDP_ENCAP_UCAST_PORT	= 3055;
@@ -27,7 +27,10 @@ public class Packet {
 	public static final int DEFAULT_DATA_DESTINATION_PORT	= 7500;
 	public static final int DEFAULT_DATA_SOURCE_PORT	= 0;
         
+/* DoS limitation to protocol (MS08-036, KB950762) */        
         public static final int PGM_MAX_APDU            = 65535;
+        
+/* Cisco default: 24 (max 8200), Juniper & H3C default: 16, SmartPGM: 64 */        
         public static final int PGM_MAX_FRAGMENTS       = 16;
         
 	public static final int SIZEOF_INADDR		= 4;
@@ -39,20 +42,48 @@ public class Packet {
         public static final int SIZEOF_PGM_OPT_HEADER	= 3;
         public static final int SIZEOF_PGM_OPT_LENGTH	= 4;
         public static final int SIZEOF_PGM_OPT_FRAGMENT	= 13;
+        public static final int SIZEOF_PGM_OPT_FIN      = 1;
         public static final int SIZEOF_PGM_OPT_PGMCC_DATA	= 13;
         public static final int SIZEOF_PGM_OPT6_PGMCC_DATA	= 25;
 
-	public static final int PGM_SPM			= 0x00;
-	public static final int PGM_POLL		= 0x01;
-	public static final int PGM_POLR		= 0x02;
-	public static final int PGM_ODATA		= 0x04;
-	public static final int PGM_RDATA		= 0x05;
-	public static final int PGM_NAK			= 0x08;
-	public static final int PGM_NNAK		= 0x09;
-	public static final int PGM_NCF			= 0x0a;
-	public static final int PGM_SPMR		= 0x0c;
-	public static final int PGM_MAX			= 0xff;
+	public static final int PGM_SPM			= 0x00; /* 8.1: source path message */
+	public static final int PGM_POLL		= 0x01; /* 14.7.1: poll request */
+	public static final int PGM_POLR		= 0x02; /* 14.7.2: poll response */
+	public static final int PGM_ODATA		= 0x04; /* 8.2: original data */
+	public static final int PGM_RDATA		= 0x05; /* 8.2: repair data */
+	public static final int PGM_NAK			= 0x08; /* 8.3: NAK or negative acknowledgement */
+	public static final int PGM_NNAK		= 0x09; /* 8.3: N-NAK or null negative acknowledgement */
+	public static final int PGM_NCF			= 0x0a; /* 8.3: NCF or NAK confirmation */
+	public static final int PGM_SPMR		= 0x0c; /* 13.6: SPM request */
+        public static final int PGM_ACK                 = 0x0d; /* PGMCC: congestion control ACK */
+	public static final int PGM_MAX			= 0xff; 
 
+	public static final int PGM_OPT_LENGTH		= 0x00; /* options length */
+	public static final int PGM_OPT_FRAGMENT	= 0x01; /* fragmentation */
+	public static final int PGM_OPT_NAK_LIST	= 0x02; /* list of nak entries */
+	public static final int PGM_OPT_JOIN		= 0x03; /* late joining */
+	public static final int PGM_OPT_REDIRECT	= 0x07; /* redirect */
+	public static final int PGM_OPT_SYN		= 0x0d; /* synchronisation */
+	public static final int PGM_OPT_FIN		= 0x0e; /* session end */
+	public static final int PGM_OPT_RST		= 0x0f; /* session reset */
+        
+        public static final int PGM_OPT_PARITY_PRM	= 0x08; /* forward error correction parameters */
+        public static final int PGM_OPT_PARITY_GRP	= 0x09; /*   group number */
+        public static final int PGM_OPT_CURR_TGSIZE	= 0x0a; /*   group size */
+        
+        public static final int PGM_OPT_CR		= 0x10; /* congestion report */
+        public static final int PGM_OPT_CRQST		= 0x11; /* congestion report request */
+        
+        public static final int PGM_OPT_PGMCC_DATA	= 0x12;
+        public static final int PGM_OPT_PGMCC_FEEDBACK	= 0x13;
+        
+        public static final int PGM_OPT_NAK_BO_IVL	= 0x04; /* nak back-off interval */
+        public static final int PGM_OPT_NAK_BO_RNG	= 0x05; /* nak back-off range */
+        public static final int PGM_OPT_NBR_UNREACH	= 0x0b; /* neighbour unreachable */
+        public static final int PGM_OPT_PATH_NLA	= 0x0c; /* path nla */
+        
+        public static final int PGM_OPT_INVALID		= 0x7f; /* option invalidated */
+        
 	public static final int PGM_OPT_PARITY		= 0x80;
 	public static final int PGM_OPT_VAR_PKTLEN	= 0x40;
 	public static final int PGM_OP_ENCODED		= 0x08;

@@ -9,7 +9,7 @@ import java.net.InetAddress;
 
 import javax.annotation.Nullable;
 
-public class GroupSourceRequest
+public class GroupSourceRequest implements Comparable<GroupSourceRequest>
 {
         private int         gsr_interface = 0;
         private InetAddress gsr_group = null;
@@ -25,7 +25,7 @@ public class GroupSourceRequest
                 this.gsr_group = mcastaddr;
                 this.gsr_source = srcaddr;
         }
-        
+       
         public int getNetworkInterfaceIndex() {
                 return this.gsr_interface;
         }
@@ -36,6 +36,22 @@ public class GroupSourceRequest
 
         public InetAddress getSourceAddress() {
                 return this.gsr_source;
+        }
+
+        @Override
+        public int compareTo (GroupSourceRequest other) {
+                if (this.gsr_interface < other.gsr_interface) return -1;
+                if (this.gsr_interface > other.gsr_interface) return 1;
+                
+                if (null == this.gsr_group && null == other.gsr_group) return 0;
+                if (this.gsr_group.toString().compareTo (other.gsr_group.toString()) < 0) return -1;
+                if (this.gsr_group.toString().compareTo (other.gsr_group.toString()) > 0) return 1;
+                
+                if (null == this.gsr_source && null == other.gsr_source) return 0;
+                if (this.gsr_source.toString().compareTo (other.gsr_source.toString()) < 0) return -1;
+                if (this.gsr_source.toString().compareTo (other.gsr_source.toString()) > 0) return 1;
+                
+                return 0;
         }
 }
 
