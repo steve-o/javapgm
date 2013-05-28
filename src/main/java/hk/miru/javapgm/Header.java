@@ -143,6 +143,11 @@ public class Header {
 		return this._skb.getUnsignedShort (this._offset + Packet.PGM_TSDU_LENGTH_OFFSET);
 	}
 
+	public void setTsduLength (int tsdu_length) {
+                checkArgument (tsdu_length >= 0 && tsdu_length <= 65535);
+		this._skb.setUnsignedShort (this._offset + Packet.PGM_TSDU_LENGTH_OFFSET, tsdu_length);
+	}
+        
         @Override
 	public String toString() {
 		StringBuilder options = new StringBuilder();

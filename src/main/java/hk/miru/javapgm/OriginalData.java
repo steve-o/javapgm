@@ -4,6 +4,7 @@
 package hk.miru.javapgm;
 
 import static hk.miru.javapgm.Preconditions.checkNotNull;
+import java.net.ProtocolFamily;
 
 public class OriginalData {
 
@@ -23,12 +24,22 @@ public class OriginalData {
 		this._skb = skb;
 		this._offset = offset;
 	}
+        
+        public static SocketBuffer create (ProtocolFamily family, int tsdu_length) {
+                int tpdu_length = tsdu_length + Packet.calculateOffset (false, null);
+                SocketBuffer skb = new SocketBuffer (tpdu_length);
+		skb.setHeaderOffset (0);
+		skb.getHeader().setType (Packet.PGM_ODATA);
+                skb.getHeader().setTsduLength (tsdu_length);
+		skb.reserve (Packet.SIZEOF_PGM_HEADER);
+                return skb;
+        }
 
 	public final SequenceNumber getDataSequenceNumber() {
 		return SequenceNumber.fromIntBits (this._skb.getSignedInt (this._offset + DATA_SQN_OFFSET));
 	}
 
-	public final void setDataSequenceNumber (SequenceNumber data_sqn) {
+	public void setDataSequenceNumber (SequenceNumber data_sqn) {
                 checkNotNull (data_sqn);
 		this._skb.setUnsignedInt (this._offset + DATA_SQN_OFFSET, data_sqn.longValue());
 	}
@@ -37,7 +48,7 @@ public class OriginalData {
 		return SequenceNumber.fromIntBits (this._skb.getSignedInt (this._offset + DATA_TRAIL_OFFSET));
 	}
 
-	public final void setDataTrail (SequenceNumber data_trail) {
+	public void setDataTrail (SequenceNumber data_trail) {
                 checkNotNull (data_trail);
 		this._skb.setUnsignedInt (this._offset + DATA_TRAIL_OFFSET, data_trail.longValue());
 	}
@@ -54,7 +65,7 @@ public class OriginalData {
 		byte[] buf = new byte[this._skb.getHeader().getTsduLength()];
 		System.arraycopy (this._skb.getRawBytes(), this._offset + DATA_OPTIONS_OFFSET,
 				  buf, 0,
-				  this._skb.getHeader().getTsduLength());
+				  buf.length);
 		return buf;
 	}
 
@@ -62,7 +73,13 @@ public class OriginalData {
 		byte[] buf = getData();
 		return new String (buf);
 	}
-
+        
+        public void setData (byte[] tsdu, int offset, int length) {
+		System.arraycopy (tsdu, offset,
+                                  this._skb.getRawBytes(), this._offset + DATA_OPTIONS_OFFSET,
+				  length);                
+        }
+        
         @Override
 	public String toString() {
 		Header header = this._skb.getHeader();

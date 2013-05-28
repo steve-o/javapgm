@@ -68,6 +68,10 @@ public class TransmitWindow {
                 return this.lead;
         }
 
+        public final SequenceNumber getNextLead() {
+                return this.lead.plus (1);
+        }
+        
         public boolean canPeekRetransmit() {
                 return (null != this.tryPeekRetransmit());
         }

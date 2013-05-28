@@ -800,6 +800,21 @@ public class Socket {
         public SelectionKey register (Selector selector, int op) throws ClosedChannelException {
                 return this.recv_sock.register (selector, op);
         }
+        
+        public IoStatus send (byte[] apdu) {
+                LOG.debug ("send");
+                
+/* State */
+                if (!this.isBound || this.isDestroyed || apdu.length > this.max_apdu)
+                        return IoStatus.IO_STATUS_ERROR;
+                
+/* Pass on non-fragment calls */
+                if (apdu.length <= this.max_tsdu) {
+                        return this.send_odata (apdu);
+                } else {
+                        return this.send_apdu (apdu);
+                }
+        }
                 
 	public IoStatus receive (List<SocketBuffer> skbs) throws IOException {
 		IoStatus status = IoStatus.IO_STATUS_WOULD_BLOCK;
@@ -1673,7 +1688,92 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 			return false;
 		}
 	}
+        
+        private IoStatus send_odata (byte[] tsdu)
+        {
+/* Pre-conditions */
+                assert (tsdu.length <= this.max_tsdu);
+            
+                LOG.debug ("send_odata");
 
+		SocketBuffer skb = OriginalData.create (this.family, tsdu.length);
+		Header header = skb.getHeader();
+		OriginalData odata = new OriginalData (skb, skb.getDataOffset());
+		header.setGlobalSourceId (this.tsi.getGlobalSourceId());
+		header.setSourcePort (this.tsi.getSourcePort());
+		header.setDestinationPort (this.dataDestinationPort);
+
+/* ODATA */
+		odata.setDataSequenceNumber (this.window.getNextLead());
+                odata.setDataTrail (this.window.getTrail());
+                odata.setData (tsdu, 0, tsdu.length);
+
+		header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
+                
+/* Add to transmit window, skb::data set to payload */
+                this.window.add (skb);
+
+		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
+							 0,
+							 skb.getRawBytes().length,
+							 this.send_gsr.getMulticastAddress(),
+							 this.udpEncapsulationMulticastPort);
+		try {
+			this.send_sock.send (pkt);
+		} catch (java.io.IOException e) {
+			LOG.error (e.toString());
+		}                
+                
+                return IoStatus.IO_STATUS_NORMAL;
+        }
+        
+        private int calculateMaximumTsdu (boolean canFragment) {
+                int max_tsdu = canFragment ? this.max_tsdu_fragment : this.max_tsdu;
+                return max_tsdu;
+        }
+
+        private IoStatus send_apdu (byte[] apdu)
+        {
+                int data_bytes_offset = 0;
+                
+                do {
+                        int tsdu_length = Math.min (calculateMaximumTsdu (true), apdu.length - data_bytes_offset);
+                    
+                        SocketBuffer skb = OriginalData.create (this.family, tsdu_length);
+                        Header header = skb.getHeader();
+                        OriginalData odata = new OriginalData (skb, skb.getDataOffset());
+                        header.setGlobalSourceId (this.tsi.getGlobalSourceId());
+                        header.setSourcePort (this.tsi.getSourcePort());
+                        header.setDestinationPort (this.dataDestinationPort);
+
+        /* ODATA */
+                        odata.setDataSequenceNumber (this.window.getNextLead());
+                        odata.setDataTrail (this.window.getTrail());
+                        odata.setData (apdu, data_bytes_offset, tsdu_length);
+
+                        header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
+
+/* Add to transmit window, skb::data set to payload */
+                        this.window.add (skb);                      
+                        
+                        DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
+                                                                 0,
+                                                                 skb.getRawBytes().length,
+                                                                 this.send_gsr.getMulticastAddress(),
+                                                                 this.udpEncapsulationMulticastPort);
+                        try {
+                                this.send_sock.send (pkt);
+                        } catch (java.io.IOException e) {
+                                LOG.error (e.toString());
+/* Fall through silently on other errors */                                
+                        }                
+                } while (data_bytes_offset < apdu.length);
+                assert (data_bytes_offset == apdu.length);
+                
+/* Success */                
+                return IoStatus.IO_STATUS_NORMAL;
+        }
+        
 	private void cancel (Peer peer, SocketBuffer skb, long now)
 	{
 		LOG.info ("Lost data #{} due to cancellation.", skb.getSequenceNumber());
