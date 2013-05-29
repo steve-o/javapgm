@@ -91,7 +91,7 @@ public class TransmitWindow {
                 state.retransmit_count++;
         }
         
-	private boolean isRetransmitEmpty() {
+	public boolean isRetransmitEmpty() {
 		return this.retransmitQueue.isEmpty();
 	}
 

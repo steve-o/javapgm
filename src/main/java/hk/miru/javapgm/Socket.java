@@ -6,6 +6,12 @@ package hk.miru.javapgm;
 
 import static hk.miru.javapgm.Preconditions.checkArgument;
 import static hk.miru.javapgm.Preconditions.checkNotNull;
+import static hk.miru.javapgm.ReceiveWindow.Returns.RXW_APPENDED;
+import static hk.miru.javapgm.ReceiveWindow.Returns.RXW_BOUNDS;
+import static hk.miru.javapgm.ReceiveWindow.Returns.RXW_DUPLICATE;
+import static hk.miru.javapgm.ReceiveWindow.Returns.RXW_INSERTED;
+import static hk.miru.javapgm.ReceiveWindow.Returns.RXW_MALFORMED;
+import static hk.miru.javapgm.ReceiveWindow.Returns.RXW_MISSING;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -852,7 +858,10 @@ public class Socket {
 /* NAK status */
                 else if (this.canSendData)
                 {
-                        // TODO;
+                        if (!this.window.isRetransmitEmpty()) {
+                                if (!onDeferredNak())
+                                        status = IoStatus.IO_STATUS_RATE_LIMITED;
+                        }
                 }
 
 		if (0 == ++(this.lastCommit))
@@ -920,15 +929,76 @@ if (false && (Math.random() < 0.25)) {
 		return IoStatus.IO_STATUS_NORMAL;
 	}
 
+/* Upstream = receiver to source, peer-to-peer = receive to receiver
+ *
+ * NB: SPMRs can be upstream or peer-to-peer, if the packet is multicast then its
+ *     a peer-to-peer message, if its unicast its an upstream message.
+ *
+ * Returns TRUE on valid processed packet, returns FALSE on discarded packet.
+ */        
 	private boolean onUpstream (
 		SocketBuffer skb,
 		InetAddress sourceAddress,
 		InetAddress destinationAddress
 		)
 	{
-		return false;
+		if (!this.canSendData) {
+			LOG.info ("Discarded packet for muted source.");
+			return false;
+		}
+
+/* Unicast upstream message, note that dport & sport are reversed */                
+		if (skb.getHeader().getSourcePort() != this.dataDestinationPort) {
+/* It is an upstream/peer-to-peer for another session */                    
+			LOG.info ("Discarded packet on data-destination port mismatch.");
+			LOG.info ("Data-destination port: {}", skb.getHeader().getDestinationPort());
+			return false;
+		}
+                
+                if (skb.getHeader().getTransportSessionId().getGlobalSourceId() != this.tsi.getGlobalSourceId()) {
+/* It is an upstream/peer-to-peer for another session */                    
+                        LOG.info ("Discarded packet on GSI mismatch.");
+                        return false;
+                }
+
+/* Advance SKB pointer to PGM type header */                
+		skb.pull (Packet.SIZEOF_PGM_HEADER);
+
+		switch (skb.getHeader().getType()) {
+		case Packet.PGM_NAK:
+			if (!onNak (skb))
+				return false;
+                        break;
+
+                case Packet.PGM_NNAK:
+                        if (!onNullNak (skb))
+                                return false;
+                        break;
+
+                case Packet.PGM_SPMR:
+                        if (!onSpmRequest (skb))
+                                return false;
+                        break;
+
+                case Packet.PGM_ACK:
+                        if (!onAck (skb))
+                                return false;
+                        break;
+                    
+                case Packet.PGM_POLR:
+		default:
+			LOG.info ("Discarded unsupported PGM type packet.");
+			return false;
+		}
+
+		return true;
 	}
 
+        
+/* Peer to peer message, either multicast NAK or multicast SPMR.
+ *
+ * Returns TRUE on valid processed packet, returns FALSE on discarded packet.
+ */        
 	private boolean onPeer (
 		SocketBuffer skb,
 		InetAddress sourceAddress,
@@ -938,6 +1008,10 @@ if (false && (Math.random() < 0.25)) {
 		return false;
 	}
 
+/* Source to receiver message
+ *
+ * Returns TRUE on valid processed packet, returns FALSE on discarded packet.
+ */        
 	private boolean onDownstream (
 		SocketBuffer skb,
 		InetAddress sourceAddress,
@@ -950,12 +1024,14 @@ if (false && (Math.random() < 0.25)) {
 			return false;
 		}
 
+/* PGM packet DPORT contains our sock DPORT */                
 		if (skb.getHeader().getDestinationPort() != this.dataDestinationPort) {
 			LOG.info ("Discarded packet on data-destination port mismatch.");
 			LOG.info ("Data-destination port: {}", skb.getHeader().getDestinationPort());
 			return false;
 		}
 
+/* Search for TSI peer context or create a new one */                
 		TransportSessionId tsi = skb.getHeader().getTransportSessionId();
 		source[0] = this.peers_hashtable.get (tsi);
 		if (null == source[0]) {
@@ -967,6 +1043,7 @@ if (false && (Math.random() < 0.25)) {
 
 		skb.pull (Packet.SIZEOF_PGM_HEADER);
 
+/* Handle PGM packet type */                
 		switch (skb.getHeader().getType()) {
 		case Packet.PGM_RDATA:
 			LOG.info ("********* REPAIR DATA ***************");
@@ -983,10 +1060,12 @@ if (false && (Math.random() < 0.25)) {
 		case Packet.PGM_SPM:
 			if (!this.onSourcePathMessage (source[0], skb))
 				return false;
+/* Update group NLA if appropriate */                        
 			if (destinationAddress.isMulticastAddress())
 				source[0].setGroupAddress (destinationAddress);
 			break;
 
+                case Packet.PGM_POLL:
 		default:
 			LOG.info ("Discarded unsupported PGM type packet.");
 			return false;
@@ -1016,61 +1095,6 @@ if (false && (Math.random() < 0.25)) {
 
 		LOG.info ("Discarded unknown PGM packet.");
 		return false;
-	}
-
-	private boolean onData (
-		Peer source,
-		SocketBuffer skb
-		)
-	{
-		int msgCount = 0;
-		boolean flushNaks = false;
-
-		LOG.info ("onData");
-
-		final long nakBackoffExpiration = skb.getTimestamp() + calculateNakRandomBackoffInterval();
-
-		skb.setOriginalDataOffset (skb.getDataOffset());
-
-		final int opt_total_length = skb.getAsOriginalData().getOptionTotalLength();
-
-/* advance data pointer to payload */
-		skb.pull (OriginalData.SIZEOF_DATA_HEADER + opt_total_length);
-
-		if (opt_total_length > 0)
-			Packet.parseOptionExtensions (skb, skb.getDataOffset());
-
-		final ReceiveWindow.Returns addStatus = source.add (skb, skb.getTimestamp(), nakBackoffExpiration);
-LOG.info ("ReceiveWindow.add returned " + addStatus);
-
-		switch (addStatus) {
-		case RXW_MISSING:
-			flushNaks = true;
-		case RXW_INSERTED:
-		case RXW_APPENDED:
-			msgCount++;
-			break;
-
-		case RXW_DUPLICATE:
-		case RXW_MALFORMED:
-		case RXW_BOUNDS:
-			return false;
-		}
-
-		if (flushNaks) {
-/* flush out 1st time nak packets */
-			if (flushNaks && this.nextPoll > nakBackoffExpiration)
-				this.nextPoll = nakBackoffExpiration;
-		}
-		return true;
-	}
-
-	private boolean onNakConfirm (
-		Peer source,
-		SocketBuffer skb
-		)
-	{
-		return true;
 	}
 
 	private boolean onSourcePathMessage (
@@ -1123,7 +1147,118 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
 		source.clearSpmrExpiration();
 		return true;
 	}
+        
+	private boolean onNakConfirm (
+		Peer source,
+		SocketBuffer skb
+		)
+	{
+		return true;
+	}
 
+	private boolean onData (
+		Peer source,
+		SocketBuffer skb
+		)
+	{
+		int msgCount = 0;
+		boolean flushNaks = false;
+
+		LOG.info ("onData");
+
+		final long nakBackoffExpiration = skb.getTimestamp() + calculateNakRandomBackoffInterval();
+
+		skb.setOriginalDataOffset (skb.getDataOffset());
+
+		final int opt_total_length = skb.getAsOriginalData().getOptionTotalLength();
+
+/* advance data pointer to payload */
+		skb.pull (OriginalData.SIZEOF_DATA_HEADER + opt_total_length);
+
+		if (opt_total_length > 0)
+			Packet.parseOptionExtensions (skb, skb.getDataOffset());
+
+		final ReceiveWindow.Returns addStatus = source.add (skb, skb.getTimestamp(), nakBackoffExpiration);
+LOG.info ("ReceiveWindow.add returned " + addStatus);
+
+		switch (addStatus) {
+		case RXW_MISSING:
+			flushNaks = true;
+		case RXW_INSERTED:
+		case RXW_APPENDED:
+			msgCount++;
+			break;
+
+		case RXW_DUPLICATE:
+		case RXW_MALFORMED:
+		case RXW_BOUNDS:
+			return false;
+		}
+
+		if (flushNaks) {
+/* flush out 1st time nak packets */
+			if (flushNaks && this.nextPoll > nakBackoffExpiration)
+				this.nextPoll = nakBackoffExpiration;
+		}
+		return true;
+	}        
+        
+/* A deferred request for RDATA, now processing in the timer thread, we check the transmit
+ * window to see if the packet exists and forward on, maintaining a lock until the queue is
+ * empty.
+ *
+ * Returns TRUE on success, returns FALSE if operation would block.
+ */        
+        private boolean onDeferredNak()
+        {
+                return true;
+        }
+        
+/* SPMR indicates if multicast to cancel own SPMR, or unicast to send SPM.
+ *
+ * Rate limited to 1/IHB_MIN per TSI (13.4).
+ *
+ * If SPMR was valid, returns TRUE, if invalid returns FALSE.
+ */        
+        private boolean onSpmRequest (SocketBuffer skb)
+        {
+                return false;
+        }
+
+/* NAK requesting RDATA transmission for a sending sock, only valid if
+ * sequence number(s) still in transmission window.
+ *
+ * We can potentially have different IP versions for the NAK packet to the send group.
+ *
+ * TODO: fix IPv6 AFIs
+ *
+ * Take in a NAK and pass off to an asynchronous queue for another thread to process
+ *
+ * If NAK is valid, returns TRUE.  on error, FALSE is returned.
+ */        
+        private boolean onNak (SocketBuffer skb)
+        {
+                return false;
+        }
+        
+/* Null-NAK, or N-NAK propogated by a DLR for hand waving excitement
+ *
+ * If NNAK is valid, returns TRUE.  on error, FALSE is returned.
+ */        
+        private boolean onNullNak (SocketBuffer skb)
+        {
+                return false;
+        }
+        
+/* ACK, sent upstream by one selected ACKER for congestion control feedback.
+ *
+ * If ACK is valid, returns TRUE.  on error, FALSE is returned.
+ */        
+        private boolean onAck (SocketBuffer skb)
+        {
+                return false;
+        }
+        
 /* copy any contiguous buffers in the peer list to the provided buffer.
  */
 	private int flushPeersPending (
