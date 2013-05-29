@@ -68,7 +68,7 @@ public class TransportSessionId
 		this.gsi = gsi;
 	}
 
-	private void setSourcePort (int sourcePort) {
+	public void setSourcePort (int sourcePort) {
                 checkArgument (sourcePort >= 0 && sourcePort <= 65535);
 		this.sourcePort = sourcePort;
 	}

@@ -5,8 +5,6 @@ package hk.miru.javapgm;
 import static hk.miru.javapgm.Preconditions.checkArgument;
 import static hk.miru.javapgm.Preconditions.checkNotNull;
 
-import java.util.Random;
-
 public class SocketAddress
 {
 	private TransportSessionId tsi = null;
@@ -22,12 +20,7 @@ public class SocketAddress
 	public SocketAddress (GlobalSourceId gsi, int destinationPort) {
                 checkNotNull (gsi);
                 checkArgument (destinationPort >= 0 && destinationPort <= 65535);
-                Random rand = new Random();
-                short sourcePort;
-                do {
-                        sourcePort = (short)rand.nextInt (0xffff);
-                } while (sourcePort == destinationPort);
-                this.tsi = new TransportSessionId (gsi, sourcePort);
+                this.tsi = new TransportSessionId (gsi, Packet.DEFAULT_DATA_SOURCE_PORT);
                 this.port = destinationPort;
 	}
         

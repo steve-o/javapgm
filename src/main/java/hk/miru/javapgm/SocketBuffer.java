@@ -5,15 +5,15 @@ package hk.miru.javapgm;
 import static hk.miru.javapgm.Preconditions.checkArgument;
 import static hk.miru.javapgm.Preconditions.checkNotNull;
 
-import java.net.Socket;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nullable;
+import org.apache.logging.log4j.LogManager;
 
 @SuppressWarnings("PointlessBitwiseExpression")
 public class SocketBuffer {
 
-	private Socket			_socket = null;
+	private hk.miru.javapgm.Socket	_socket = null;
 	private long			_timestamp = 0;
 	private TransportSessionId	_tsi = null;
 
@@ -42,6 +42,10 @@ public class SocketBuffer {
 		this._data = this._tail = this._head;
 		this._end  = size;
 	}
+        
+        public void setSocket (hk.miru.javapgm.Socket socket) {
+                this._socket = socket;
+        }
 
 	public long getTimestamp() {
 		return this._timestamp;
@@ -212,29 +216,68 @@ public class SocketBuffer {
 	}
 
         public static boolean isValid (SocketBuffer skb) {
-                if (null == skb) return false;
+                if (null == skb) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB is null.");
+                        return false;
+                }
 /* Socket */                
-//                if (null == skb._socket) return false;
+                if (null == skb._socket) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB socket is not defined.");                    
+                        return false;
+                }
 /* Timestamp */
-                if (skb._timestamp <= 0) return false;
+                if (skb._timestamp <= 0) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB timestamp is not defined.");
+                        return false;
+                }
 /* TSI */
 /* Sequence can be any value */
 /* ControlBuffer can be any value */
 /* Length can be any value */
 /* Pointers */
-                if (skb._head < 0) return false;
-                if (skb._data < 0) return false;
-                if (skb._tail < 0) return false;
-                if (skb._data > skb._tail) return false;
-                if (skb._len != (skb._tail - skb._data)) return false;
-                if (skb._end < 0) return false;
-                if (skb._tail > skb._end) return false;
+                if (skb._head < 0) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB head pointer is not defined.");
+                        return false;
+                }
+                if (skb._data < 0) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB data pointer is not defined.");
+                        return false;
+                }
+                if (skb._tail < 0) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB tail pointer is not defined.");
+                        return false;
+                }
+                if (skb._data > skb._tail) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB data pointer beyond tail.");
+                        return false;
+                }
+                if (skb._len != (skb._tail - skb._data)) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB length mismatch to tail - data.");
+                        return false;
+                }
+                if (skb._end < 0) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB end pointer not defined.");
+                        return false;
+                }
+                if (skb._tail > skb._end) {
+                        LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB tail point beyond end.");
+                        return false;
+                }
 /* PGM header */
                 if (null != skb._header) {
-                        if (null == skb._odata) return false;
+                        if (null == skb._odata) {
+                                LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB odata is not defined in presence of header.");
+                                return false;
+                        }
                 } else {
-                        if (null != skb._odata) return false;
-                        if (null != skb._opt_fragment) return false;
+                        if (null != skb._odata) {
+                                LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB odata defined without header.");
+                                return false;
+                        }
+                        if (null != skb._opt_fragment) {
+                                LogManager.getLogger (SocketBuffer.class.getName()).error ("SKB option fragment defined without header.");
+                                return false;
+                        }
                 }
                 return true;
         }

@@ -162,21 +162,24 @@ public class Packet {
 	}
 
 	public static int doChecksum (byte[] buf) {
-		int sum = 0;
+		int acc = 0;
 		int i = 0, len = buf.length;
 		while (len > 1) {
-			final int word16 = ((buf[i] & 0xff) << 8) + (buf[i + 1] & 0xff);
-			sum += word16;
+/* First byte as most significant, second byte as least significant */                    
+			final int word16 = ((buf[i] & 0xff) << 8) | (buf[i + 1] & 0xff);
+			acc += word16;
 			len -= 2; i += 2;
 		}
-/* trailing odd byte */
-		if (len > 0)
-			sum += buf[i];
-/* fold */
-		while ((sum >> 16) > 0)
-			sum = (sum & 0xffff) + (sum >> 16);
+/* Trailing odd byte */
+		if (len > 0) {
+                        final int word16 = (buf[i] & 0xff) << 8;
+			acc += word16;
+                }
+/* Fold accumulator down to 16-bits */
+		while ((acc >> 16) > 0)
+			acc = (acc & 0xffff) + (acc >> 16);
 /* 0-value special case of no checksum */
-		return (sum == 0xffff) ? (int)sum : (int)(~sum & 0xffff);
+		return (acc == 0xffff) ? (int)acc : (int)(~acc & 0xffff);
 	}
 }
 

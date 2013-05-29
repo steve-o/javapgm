@@ -26,12 +26,14 @@ public class OriginalData {
 	}
         
         public static SocketBuffer create (ProtocolFamily family, int tsdu_length) {
-                int tpdu_length = tsdu_length + Packet.calculateOffset (false, null);
+                int tpdu_length = Packet.calculateOffset (false, null) + tsdu_length;
                 SocketBuffer skb = new SocketBuffer (tpdu_length);
 		skb.setHeaderOffset (0);
 		skb.getHeader().setType (Packet.PGM_ODATA);
                 skb.getHeader().setTsduLength (tsdu_length);
-		skb.reserve (Packet.SIZEOF_PGM_HEADER);
+		skb.reserve (Packet.calculateOffset (false, null));
+                skb.put (tsdu_length);
+                skb.setOriginalDataOffset (Packet.SIZEOF_PGM_HEADER);
                 return skb;
         }
 

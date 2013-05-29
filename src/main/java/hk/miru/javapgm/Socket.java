@@ -66,7 +66,7 @@ public class Socket {
         
         public static final int UINT8_MAX = 0xff;
         public static final int UINT16_MAX = 0xffff;
-        public static final int UINT32_MAX = 0xffff_ffff;
+        public static final long UINT32_MAX = 0xffff_ffffL;
 
         hk.miru.javapgm.GroupSourceRequest send_gsr = null;
 	InetAddress send_addr = null;
@@ -96,7 +96,7 @@ public class Socket {
         
         long lastCommit = 0;
         
-        SequenceNumber spm_sqn = null;
+        SequenceNumber spm_sqn = SequenceNumber.ZERO;
         int spm_ambient_interval = 0;
         int[] spm_heartbeat_interval;
 	long peerExpiration = 0;
@@ -606,6 +606,12 @@ public class Socket {
                         
                 this.tsi = sockaddr.getTransportSessionId();
                 this.dataDestinationPort = sockaddr.getPort();
+                if (this.tsi.getSourcePort() == 0) {
+                        Random rand = new Random();
+                        do {
+                                this.tsi.setSourcePort (rand.nextInt (UINT16_MAX));
+                        } while (this.tsi.getSourcePort() == this.dataDestinationPort);
+                }
                 
 /* pseudo-random number generator for back-off intervals */
                 this.rand = new Random();
@@ -691,33 +697,30 @@ public class Socket {
 
                 try {
                         NetworkInterface ni = NetworkInterface.getByIndex (send_req.getNetworkInterfaceIndex());
-                        if (false) {
-                                Enumeration<InetAddress> inetAddresses = ni.getInetAddresses();
-                                while (inetAddresses.hasMoreElements()) {
-                                        InetAddress addr = inetAddresses.nextElement();
-                                        if (addr instanceof Inet6Address) {
-                                                Inet6Address in6addr = (Inet6Address)addr;
-                                                if (in6addr.getScopeId() == send_req.getScopeId()) {
-                                                        send_addr = new InetSocketAddress (addr, 0);
-                                                        break;
-                                                }
-                                        } else if (addr instanceof Inet4Address) {
+                        Enumeration<InetAddress> inetAddresses = ni.getInetAddresses();
+                        while (inetAddresses.hasMoreElements()) {
+                                InetAddress addr = inetAddresses.nextElement();
+                                if (addr instanceof Inet6Address) {
+                                        Inet6Address in6addr = (Inet6Address)addr;
+                                        if (in6addr.getScopeId() == send_req.getScopeId()) {
                                                 send_addr = new InetSocketAddress (addr, 0);
                                                 break;
                                         }
+                                } else if (addr instanceof Inet4Address) {
+                                        send_addr = new InetSocketAddress (addr, 0);
+                                        break;
                                 }
-                                this.send_sock.bind (send_addr);
-                        } else {
-/* Java does not permit bind on a MulticastSocket */                        
-                                this.send_sock.setNetworkInterface (ni);
                         }
+/* Java does not permit bind on a MulticastSocket so defer to NetworkInterface binding */
+                        this.send_sock.setNetworkInterface (ni);
                 } catch (IOException ex) {
                         LOG.error ("Binding send socket to address {}: {}", send_addr, ex);
                         return false;
                 }
                 
 /* Resolve bound address if wildcard */
-                if (send_addr.isUnresolved()) {
+                if (send_addr.getAddress().isAnyLocalAddress()) {
+                    System.out.println ("resolving send addr...");
                         InetAddress addr;
                         try {
                                 addr = hk.miru.javapgm.NetworkInterface.getMulticastEnabledNodeAddress (this.family);
@@ -801,18 +804,18 @@ public class Socket {
                 return this.recv_sock.register (selector, op);
         }
         
-        public IoStatus send (byte[] apdu) {
+        public IoStatus send (byte[] apdu, int offset, int apdu_length) {
                 LOG.debug ("send");
                 
 /* State */
-                if (!this.isBound || this.isDestroyed || apdu.length > this.max_apdu)
+                if (!this.isBound || this.isDestroyed || apdu_length > this.max_apdu)
                         return IoStatus.IO_STATUS_ERROR;
                 
 /* Pass on non-fragment calls */
-                if (apdu.length <= this.max_tsdu) {
-                        return this.send_odata (apdu);
+                if (apdu_length <= this.max_tsdu) {
+                        return this.send_odata (apdu, offset, apdu_length);
                 } else {
-                        return this.send_apdu (apdu);
+                        return this.send_apdu (apdu, offset, apdu_length);
                 }
         }
                 
@@ -845,12 +848,16 @@ public class Socket {
 		
 			do {
 				InetSocketAddress src = (InetSocketAddress)this.recv_sock.receive (this.buffer);
+/* No datagram was immediately available. */                                
+                                if (null == src)
+                                        break;
 				this.buffer.flip();
 				this.rx_buffer = new SocketBuffer (this.buffer.remaining());
+                                this.rx_buffer.setSocket (this);
+				this.rx_buffer.setTimestamp (System.currentTimeMillis());
 				this.rx_buffer.put (this.rx_buffer.getRawBytes().length);
 				this.buffer.get (this.rx_buffer.getRawBytes(), 0, this.rx_buffer.getRawBytes().length);
 				this.buffer.clear();
-				this.rx_buffer.setTimestamp (System.currentTimeMillis());
 /* Rx testing */
 if (false && (Math.random() < 0.25)) {
 	LOG.info ("Dropping packet.");
@@ -1600,7 +1607,7 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 			return false;
 		}               
 /* Advance SPM sequence only on successful transmission */
-                this.spm_sqn.plus (1);
+                this.spm_sqn = this.spm_sqn.plus (1);
                 return true;
         }
         
@@ -1689,16 +1696,18 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		}
 	}
         
-        private IoStatus send_odata (byte[] tsdu)
+        private IoStatus send_odata (byte[] tsdu, int offset, int tsdu_length)
         {
 /* Pre-conditions */
-                assert (tsdu.length <= this.max_tsdu);
+                assert (tsdu_length <= this.max_tsdu);
             
                 LOG.debug ("send_odata");
 
-		SocketBuffer skb = OriginalData.create (this.family, tsdu.length);
+		SocketBuffer skb = OriginalData.create (this.family, tsdu_length);
+                skb.setSocket (this);
+                skb.setTimestamp (System.currentTimeMillis());
 		Header header = skb.getHeader();
-		OriginalData odata = new OriginalData (skb, skb.getDataOffset());
+		OriginalData odata = skb.getAsOriginalData();
 		header.setGlobalSourceId (this.tsi.getGlobalSourceId());
 		header.setSourcePort (this.tsi.getSourcePort());
 		header.setDestinationPort (this.dataDestinationPort);
@@ -1706,7 +1715,7 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 /* ODATA */
 		odata.setDataSequenceNumber (this.window.getNextLead());
                 odata.setDataTrail (this.window.getTrail());
-                odata.setData (tsdu, 0, tsdu.length);
+                odata.setData (tsdu, offset, tsdu_length);
 
 		header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
                 
@@ -1732,16 +1741,18 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 return max_tsdu;
         }
 
-        private IoStatus send_apdu (byte[] apdu)
+        private IoStatus send_apdu (byte[] apdu, int offset, int apdu_length)
         {
                 int data_bytes_offset = 0;
                 
                 do {
-                        int tsdu_length = Math.min (calculateMaximumTsdu (true), apdu.length - data_bytes_offset);
+                        int tsdu_length = Math.min (calculateMaximumTsdu (true), apdu_length - data_bytes_offset);
                     
                         SocketBuffer skb = OriginalData.create (this.family, tsdu_length);
+                        skb.setSocket (this);
+                        skb.setTimestamp (System.currentTimeMillis());
                         Header header = skb.getHeader();
-                        OriginalData odata = new OriginalData (skb, skb.getDataOffset());
+                        OriginalData odata = skb.getAsOriginalData();
                         header.setGlobalSourceId (this.tsi.getGlobalSourceId());
                         header.setSourcePort (this.tsi.getSourcePort());
                         header.setDestinationPort (this.dataDestinationPort);
@@ -1749,7 +1760,7 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
         /* ODATA */
                         odata.setDataSequenceNumber (this.window.getNextLead());
                         odata.setDataTrail (this.window.getTrail());
-                        odata.setData (apdu, data_bytes_offset, tsdu_length);
+                        odata.setData (apdu, offset + data_bytes_offset, tsdu_length);
 
                         header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
 
@@ -1766,9 +1777,12 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                         } catch (java.io.IOException e) {
                                 LOG.error (e.toString());
 /* Fall through silently on other errors */                                
-                        }                
-                } while (data_bytes_offset < apdu.length);
-                assert (data_bytes_offset == apdu.length);
+                        }
+                        
+                        data_bytes_offset += tsdu_length;
+                        
+                } while (data_bytes_offset < apdu_length);
+                assert (data_bytes_offset == apdu_length);
                 
 /* Success */                
                 return IoStatus.IO_STATUS_NORMAL;

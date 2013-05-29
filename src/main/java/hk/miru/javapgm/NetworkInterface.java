@@ -17,15 +17,15 @@ public class NetworkInterface
  * RR configuration of the host.
  */    
         public static InetAddress[] getNodeAddress (ProtocolFamily family) throws UnknownHostException {
-                LinkedList<InetAddress> addresses = new LinkedList<> ();
+                LinkedList<InetAddress> list = new LinkedList<> ();
                 String nodename = InetAddress.getLocalHost().getHostName();
                 for (InetAddress addr : InetAddress.getAllByName (nodename)) {
                         if (StandardProtocolFamily.INET == family && addr instanceof Inet4Address)
-                                addresses.add (addr);
+                                list.add (addr);
                         else if (StandardProtocolFamily.INET6 == family && addr instanceof Inet6Address)
-                                addresses.add (addr);
+                                list.add (addr);
                 }
-                return (InetAddress[]) addresses.toArray();
+                return list.toArray (new InetAddress[list.size()]);
         }
     
 /* Pick a node address that supports multicast traffic iff more than one
