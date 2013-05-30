@@ -16,6 +16,10 @@ public class NakConfirm extends Nak {
                 skb.getHeader().setType (Packet.PGM_NCF);
                 return skb;
         }
+
+	public static SocketBuffer create (InetAddress nak_src_nla, InetAddress nak_grp_nla) {
+		return create (nak_src_nla, nak_grp_nla, 1);
+	}        
 }
 
 /* eof */

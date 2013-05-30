@@ -955,7 +955,7 @@ if (false && (Math.random() < 0.25)) {
 			return false;
 		}
                 
-                if (skb.getHeader().getTransportSessionId().getGlobalSourceId() != this.tsi.getGlobalSourceId()) {
+                if (!skb.getHeader().getTransportSessionId().getGlobalSourceId().equals (this.tsi.getGlobalSourceId())) {
 /* It is an upstream/peer-to-peer for another session */                    
                         LOG.info ("Discarded packet on GSI mismatch.");
                         return false;
@@ -1298,7 +1298,7 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
 
 /* Queue retransmit requests */
                 
-                return false;
+                return true;
         }
         
 /* Null-NAK, or N-NAK propogated by a DLR for hand waving excitement
@@ -2000,6 +2000,8 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 							 this.udpEncapsulationMulticastPort);
 		try {
 			this.send_sock.send (pkt);
+			LOG.info ("Sent NCF to {}", this.send_gsr.getMulticastAddress());
+			LOG.info ("NCF: {}", skb);
 			return true;
 		} catch (java.io.IOException e) {
 			LOG.error (e.toString());
