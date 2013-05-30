@@ -117,7 +117,7 @@ public class daytime {
                                                 timeout = Math.min (this.sock.getRateRemain(), timeout);
                                         }
                                 case IO_STATUS_WOULD_BLOCK:
-                                        if (selector.select (timeout) > 0) {
+                                        if (timeout > 0 && selector.select (timeout) > 0) {
                                                 selector.selectedKeys().clear();
                                         }
                                         now = System.currentTimeMillis();

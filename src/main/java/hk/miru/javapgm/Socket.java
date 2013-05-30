@@ -976,7 +976,7 @@ if (false && (Math.random() < 0.25)) {
                         break;
 
                 case Packet.PGM_SPMR:
-                        if (!onSpmRequest (skb))
+                        if (!onSpmRequest (null, skb))
                                 return false;
                         break;
 
@@ -1153,6 +1153,7 @@ if (false && (Math.random() < 0.25)) {
 		SocketBuffer skb
 		)
 	{
+                LOG.info ("onNakConfirm");
 		return true;
 	}
 
@@ -1220,9 +1221,22 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
  *
  * If SPMR was valid, returns TRUE, if invalid returns FALSE.
  */        
-        private boolean onSpmRequest (SocketBuffer skb)
+        private boolean onSpmRequest (@Nullable Peer peer, SocketBuffer skb)
         {
-                return false;
+/* Pre-conditions */
+                assert (null != skb);
+                
+                LOG.debug ("onSpmRequest (skb:{})", skb);
+                
+                if (null == peer) {
+                        if (!sendSpm (0)) {
+                                LOG.info ("Failed to send SPM on SPM-Request.");
+                        }
+                } else {
+                        LOG.info ("Suppressing SPMR due to peer multicast SPMR.");
+                        peer.clearSpmrExpiration();
+                }
+                return true;
         }
 
 /* NAK requesting RDATA transmission for a sending sock, only valid if
@@ -1238,6 +1252,52 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
  */        
         private boolean onNak (SocketBuffer skb)
         {
+/* Pre-conditions */
+                assert (null != skb);
+                
+                LOG.debug ("onNak (skb:{})", skb);
+
+		Nak nak = new Nak (skb, skb.getDataOffset());
+                
+/* NAK_SRC_NLA contains our sock unicast NLA */
+                if (!nak.getNakSourceNla().equals (this.send_addr)) {
+                        LOG.info ("NAK rejected for unmatched NLA: {}", nak.getNakSourceNla());
+                        return false;
+                }
+                
+/* NAK_GRP_NLA contains our sock multicast group */
+                if (!nak.getNakGroupNla().equals (this.send_gsr.getMulticastAddress())) {
+                        LOG.info ("NAK rejected as targeted for different multicast group: {}", nak.getNakGroupNla());
+                        return false;
+                }
+                
+/* Create queue object */
+                List<SequenceNumber> sqn_list = new ArrayList<> ();
+                sqn_list.add (nak.getNakSequenceNumber());
+                
+/* Check NAK list */
+                if (skb.getHeader().isOptionExtensionPresent()) {
+                        
+/* TODO: check for > 16 options & past packet end */
+                }               
+                
+/* NAK list numbers */
+                if (sqn_list.size() > 62) {
+                        LOG.info ("Malformed NAK rejected on sequence list overrun, {} reported NAKs.", sqn_list.size());
+                        return false;
+                } else if (sqn_list.size() > 1) {
+                        sendNakConfirmList (nak.getNakSourceNla(), nak.getNakGroupNla(), sqn_list);
+                } else {
+                        sendNakConfirm (nak.getNakSourceNla(), nak.getNakGroupNla(), sqn_list.get (0));
+                }
+                
+/* Send NAK confirm packet immediately, then defer to timer thread for a.s.a.p
+ * delivery of the actual RDATA packets.  Blocking send for NCF is ignored as RDATA
+ * broadcast will be sent later.
+ */                
+
+/* Queue retransmit requests */
+                
                 return false;
         }
         
@@ -1338,6 +1398,8 @@ LOG.info ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
                         final long nextAmbientSpm = this.next_ambient_spm;
                         long nextSpm = spmHeartbeatState > 0 ? Math.min (nextHeartbeatSpm, nextAmbientSpm) : nextAmbientSpm;
 
+LOG.debug ("nextHeartbeatSpm:{} nextAmbientSpm:{}", nextHeartbeatSpm, nextAmbientSpm);                        
+                        
                         if (now >= nextSpm && !sendSpm (0))
                                 return false;
                         
@@ -1373,7 +1435,8 @@ LOG.info ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
                         nextExpiration = nextExpiration > 0 ? Math.min (nextExpiration, nextSpm) : nextSpm;
 
 /* Check for reset */
-                        this.nextPoll = nextExpiration > 0 ? Math.min (this.nextPoll, nextExpiration) : nextExpiration;
+                        this.nextPoll = this.nextPoll > now ? Math.min (this.nextPoll, nextExpiration) : nextExpiration;
+LOG.debug ("nextExpiration:{} this.nextPoll:{}", nextExpiration, this.nextPoll);                        
 		}
 		else
 			this.nextPoll = nextExpiration;
@@ -1858,7 +1921,7 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		}
 	}
 
-	private boolean sendNakList (Peer peer, ArrayList<SequenceNumber> sqn_list)
+	private boolean sendNakList (Peer peer, List<SequenceNumber> sqn_list)
 	{
 		LOG.info ("sendNakList");
 
@@ -1901,6 +1964,94 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		}
 	}
 
+        private boolean sendNakConfirm (
+                InetAddress nak_src_nla,
+                InetAddress nak_grp_nla,
+                SequenceNumber sequence)
+        {
+/* Pre-conditions */
+                assert (null != nak_src_nla);
+                assert (null != nak_grp_nla);
+                
+		LOG.info ("sendNakConfirm");
+
+		SocketBuffer skb = NakConfirm.create (nak_src_nla, nak_grp_nla);
+		Header header = skb.getHeader();
+		NakConfirm ncf = new NakConfirm (skb, skb.getDataOffset());
+		header.setGlobalSourceId (this.tsi.getGlobalSourceId());
+		header.setSourcePort (this.tsi.getSourcePort());
+		header.setDestinationPort (this.dataDestinationPort);
+
+/* NCF */
+		ncf.setNakSequenceNumber (sequence);
+
+/* source nla */
+		ncf.setNakSourceNla (nak_src_nla);
+
+/* group nla */
+		ncf.setNakGroupNla (nak_grp_nla);
+
+		header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
+
+		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
+							 0,
+							 skb.getRawBytes().length,
+							 this.send_gsr.getMulticastAddress(),
+							 this.udpEncapsulationMulticastPort);
+		try {
+			this.send_sock.send (pkt);
+			return true;
+		} catch (java.io.IOException e) {
+			LOG.error (e.toString());
+			return false;
+		}
+        }
+
+	private boolean sendNakConfirmList (
+                InetAddress nak_src_nla,
+                InetAddress nak_grp_nla,
+                List<SequenceNumber> sqn_list
+                )
+	{
+		LOG.info ("sendNakConfirmList");
+
+		SocketBuffer skb = NakConfirm.create (nak_src_nla, nak_grp_nla, sqn_list.size());
+		Header header = skb.getHeader();
+		NakConfirm ncf = new NakConfirm (skb, skb.getDataOffset());
+		header.setGlobalSourceId (this.tsi.getGlobalSourceId());
+		header.setGlobalSourceId (this.tsi.getGlobalSourceId());
+		header.setSourcePort (this.tsi.getSourcePort());
+		header.setDestinationPort (this.dataDestinationPort);
+		header.setOptions (Packet.PGM_OPT_PRESENT | Packet.PGM_OPT_NETWORK);
+
+/* NCF */
+		ncf.setNakSequenceNumber (sqn_list.get (0));
+
+/* source nla */
+		ncf.setNakSourceNla (nak_src_nla);
+
+/* group nla */
+		ncf.setNakGroupNla (nak_grp_nla);
+
+/* OPT_NAK_LIST */
+		ncf.setNakListOption (sqn_list.subList (1, sqn_list.size()).toArray (new SequenceNumber[0]));
+
+		header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
+
+		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
+							 0,
+							 skb.getRawBytes().length,
+							 this.send_gsr.getMulticastAddress(),
+							 this.udpEncapsulationMulticastPort);
+		try {
+			this.send_sock.send (pkt);
+			return true;
+		} catch (java.io.IOException e) {
+			LOG.error (e.toString());
+			return false;
+		}
+	}       
+        
         private IoStatus send_odata (byte[] tsdu, int offset, int tsdu_length)
         {
 /* Pre-conditions */

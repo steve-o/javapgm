@@ -73,8 +73,8 @@ public class Nak {
 		return create (nak_src_nla, nak_grp_nla, 1);
 	}
 
-	public final long getNakSequenceNumber() {
-		return this._skb.getUnsignedInt (this._offset + NAK_SQN_OFFSET);
+	public final SequenceNumber getNakSequenceNumber() {
+		return SequenceNumber.fromIntBits (this._skb.getSignedInt (this._offset + NAK_SQN_OFFSET));
 	}
 
 	public void setNakSequenceNumber (SequenceNumber nak_sqn) {
