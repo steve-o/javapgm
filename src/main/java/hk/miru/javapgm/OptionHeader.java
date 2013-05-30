@@ -39,6 +39,10 @@ public class OptionHeader {
 		return (getRawType() & OPT_MASK);
 	}
 
+	public final boolean isLengthOption() {
+		return (OPT_LENGTH == getType());
+	}
+        
 	public final boolean isFragmentOption() {
 		return (OPT_FRAGMENT == getType());
 	}

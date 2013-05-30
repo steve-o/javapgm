@@ -10,10 +10,13 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 @SuppressWarnings("unused")
 public class Nak {
-
+        private static Logger LOG = LogManager.getLogger (Nak.class.getName());
+    
 	protected SocketBuffer	_skb = null;
 	protected int		_offset = 0;
 
@@ -217,6 +220,41 @@ public class Nak {
 	}
 
 /* TODO: TLC wanted */
+        public SequenceNumber[] getNakListOption() {
+                SequenceNumber[] sqn_list = null;
+		int opt_nak_list_offset;
+		switch (getNakSourceNlaAfi()) {
+		case Packet.AFI_IP:
+			opt_nak_list_offset = NAK_OPTIONS_OFFSET;
+			break;
+		case Packet.AFI_IP6:
+			opt_nak_list_offset = NAK6_OPTIONS_OFFSET;
+			break;
+		default:
+			return sqn_list;
+		}
+                OptionHeader optHeader = new OptionHeader (this._skb, this._offset + opt_nak_list_offset);
+                if (!optHeader.isLengthOption()) {
+                        LOG.info ("Malformed NAK rejected on unexpected primary PGM option type.");
+                        return sqn_list;
+                }
+                OptionLength optLength = new OptionLength (this._skb, optHeader.getOffset());
+                OptionNakList optNakList = null;
+                do {
+                        optHeader = new OptionHeader (this._skb, optHeader.getOffset() + optHeader.getLength());
+                        if (optHeader.isNakListOption()) {
+                                optNakList = new OptionNakList (this._skb, optHeader.getOffset(), optHeader.getLength());
+                                break;
+                        }
+                } while (!optHeader.isLastOption());
+                if (null != optNakList) {
+                        sqn_list = new SequenceNumber[optNakList.getSequenceCount()];
+            		for (int i = 0; i < sqn_list.length; i++)
+                                sqn_list[i] = optNakList.getOptionSequence (i);
+                }
+                return sqn_list;
+        }
+        
 	public void setNakListOption (SequenceNumber[] sqn_list) {
                 checkArgument (sqn_list.length > 0 && sqn_list.length <= 62);
 		int opt_nak_list_offset;

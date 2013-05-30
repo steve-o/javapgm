@@ -33,6 +33,7 @@ import java.nio.channels.MembershipKey;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.Iterator;
@@ -1277,9 +1278,11 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
                 
 /* Check NAK list */
                 if (skb.getHeader().isOptionExtensionPresent()) {
-                        
-/* TODO: check for > 16 options & past packet end */
-                }               
+                        SequenceNumber[] nak_list = nak.getNakListOption();
+                        sqn_list.addAll (Arrays.asList (nak_list));
+                }
+                
+                LOG.debug ("nak_sqn {}", sqn_list);
                 
 /* NAK list numbers */
                 if (sqn_list.size() > 62) {
