@@ -2050,7 +2050,19 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 			LOG.error (e.toString());
 			return false;
 		}
-	}       
+	}
+        
+/* Cancel any pending heartbeat SPM and schedule a new one
+ */
+        private void resetHeartbeatSpm (long now)
+        {
+                final long nextPoll = this.nextPoll;
+                final long spmHeartbeatInterval = this.spm_heartbeat_interval[this.spm_heartbeat_state = 1];
+                this.next_heartbeat_spm = now + spmHeartbeatInterval;
+                if (nextPoll > this.next_heartbeat_spm) {
+                        this.nextPoll = this.next_heartbeat_spm;
+                }
+        }
         
         private IoStatus send_odata (byte[] tsdu, int offset, int tsdu_length)
         {
@@ -2088,6 +2100,13 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		} catch (java.io.IOException e) {
 			LOG.error (e.toString());
 		}
+                
+/* Success */
+/* SPM heartbeats decay from last sent data packet */
+                resetHeartbeatSpm (skb.getTimestamp());
+                
+/* Save unfolded odata for retransmissions */
+/* Increment socket statistics */              
 
                 return IoStatus.IO_STATUS_NORMAL;
         }
@@ -2099,12 +2118,13 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 
         private IoStatus send_apdu (byte[] apdu, int offset, int apdu_length)
         {
+                SocketBuffer skb = null;
                 int data_bytes_offset = 0;
 
                 do {
                         int tsdu_length = Math.min (calculateMaximumTsdu (true), apdu_length - data_bytes_offset);
 
-                        SocketBuffer skb = OriginalData.create (this.family, tsdu_length);
+                        skb = OriginalData.create (this.family, tsdu_length);
                         skb.setSocket (this);
                         skb.setTimestamp (System.currentTimeMillis());
                         Header header = skb.getHeader();
@@ -2141,6 +2161,9 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 assert (data_bytes_offset == apdu_length);
 
 /* Success */
+/* SPM heartbeats decay from last sent data packet */
+                resetHeartbeatSpm (skb.getTimestamp());
+/* Increment socket statistics */                
                 return IoStatus.IO_STATUS_NORMAL;
         }
 
