@@ -101,12 +101,24 @@ public class SocketBuffer {
 		return this._len;
 	}
 
+/* Increase reference count */        
+        public SocketBuffer get() {
+                this._users.incrementAndGet();
+                return this;
+        }
+        
+        public void free() {
+                this._users.decrementAndGet();
+        }
+        
+/* Add data */        
 	public void put (int len) {
 		this._tail += len;
 		this._len += len;
                 checkArgument (this._tail <= this._end);
 	}
 
+/* Remove data from start of buffer */        
 	public void pull (int len) {
 		this._len -= len;
 		this._data += len;
@@ -130,6 +142,10 @@ public class SocketBuffer {
 	public OriginalData getAsOriginalData() {
 		return this._odata;
 	}
+        
+        public RepairData getAsRepairData() {
+                return new RepairData (this, this._odata._offset);
+        }
 
 	public void setOriginalDataOffset (int offset) {
 		this._odata = new OriginalData (this, offset);

@@ -53,7 +53,7 @@ public class TransmitWindow {
 			SocketBuffer skb = this.pdata[index];
                         assert (null != skb);
                         assert (SocketBuffer.isValid (skb));
-                        assert (null != skb.getTransportSessionId());
+                        assert (null == skb.getTransportSessionId());
 			return skb;
 		}
 

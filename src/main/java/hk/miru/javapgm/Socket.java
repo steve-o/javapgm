@@ -821,7 +821,7 @@ public class Socket {
 
 /* Pass on non-fragment calls */
                 if (apdu_length <= this.max_tsdu) {
-                        return this.send_odata (apdu, offset, apdu_length);
+                        return this.sendOriginalData (apdu, offset, apdu_length);
                 } else {
                         return this.send_apdu (apdu, offset, apdu_length);
                 }
@@ -1213,6 +1213,28 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
  */        
         private boolean onDeferredNak()
         {
+/* We can flush queue and block all odata, or process one set, or process each
+ * sequence number individually.
+ */
+
+/* Parity packets are re-numbered across the transmission group with index h, sharing the space
+ * with the original packets.  Beyond the transmission group size (k), the PGM option OPT_PARITY_GRP
+ * provides the extra offset value.
+ */
+
+/* Peek from the retransmit queue so we can eliminate duplicate NAKs up until the repair packet
+ * has been retransmitted.
+ */
+                SocketBuffer skb = this.window.tryPeekRetransmit();
+                if (null != skb) {
+                        if (!sendRepairData (skb.get())) {
+                                skb.free();
+                                return false;
+                        }
+                        skb.free();
+/* Now remove sequence number from retransmit queue, re-enabling NAK processing for this sequence number */                        
+                        this.window.removeRetransmit();
+                }
                 return true;
         }
         
@@ -1288,19 +1310,24 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
                 if (sqn_list.size() > 62) {
                         LOG.info ("Malformed NAK rejected on sequence list overrun, {} reported NAKs.", sqn_list.size());
                         return false;
-                } else if (sqn_list.size() > 1) {
-                        sendNakConfirmList (nak.getNakSourceNla(), nak.getNakGroupNla(), sqn_list);
-                } else {
-                        sendNakConfirm (nak.getNakSourceNla(), nak.getNakGroupNla(), sqn_list.get (0));
                 }
                 
 /* Send NAK confirm packet immediately, then defer to timer thread for a.s.a.p
  * delivery of the actual RDATA packets.  Blocking send for NCF is ignored as RDATA
  * broadcast will be sent later.
  */                
+                if (sqn_list.size() > 1) {
+                        sendNakConfirmList (nak.getNakSourceNla(), nak.getNakGroupNla(), sqn_list);
+                } else {
+                        sendNakConfirm (nak.getNakSourceNla(), nak.getNakGroupNla(), sqn_list.get (0));
+                }
 
 /* Queue retransmit requests */
-                
+                for (SequenceNumber nak_sqn : sqn_list) {
+                        if (!this.window.pushRetransmit (nak_sqn)) {
+                                LOG.debug ("Failed to push retransmit request for {}.", nak_sqn);
+                        }
+                }                
                 return true;
         }
         
@@ -2069,12 +2096,12 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 }
         }
         
-        private IoStatus send_odata (byte[] tsdu, int offset, int tsdu_length)
+        private IoStatus sendOriginalData (byte[] tsdu, int offset, int tsdu_length)
         {
 /* Pre-conditions */
                 assert (tsdu_length <= this.max_tsdu);
 
-                LOG.debug ("send_odata");
+                LOG.debug ("sendOriginalData");
 
 		SocketBuffer skb = OriginalData.create (this.family, tsdu_length);
                 skb.setSocket (this);
@@ -2138,7 +2165,7 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                         header.setSourcePort (this.tsi.getSourcePort());
                         header.setDestinationPort (this.dataDestinationPort);
 
-        /* ODATA */
+/* ODATA */
                         odata.setDataSequenceNumber (this.window.getNextLead());
                         odata.setDataTrail (this.window.getTrail());
                         odata.setData (apdu, offset + data_bytes_offset, tsdu_length);
@@ -2170,6 +2197,47 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 resetHeartbeatSpm (skb.getTimestamp());
 /* Increment socket statistics */                
                 return IoStatus.IO_STATUS_NORMAL;
+        }
+        
+/* Send repair packet.
+ *
+ * on success, TRUE is returned.  on error, FALSE is returned.
+ */        
+        private boolean sendRepairData (SocketBuffer skb)
+        {
+/* Pre-conditions */
+                assert (null != skb);
+
+                LOG.debug ("sendRepairData");               
+                
+/* Rate check including rdata specific limits */
+/* Update previous odata/rdata contents */
+		Header header = skb.getHeader();
+		RepairData rdata = skb.getAsRepairData();
+/* RDATA */
+                rdata.setDataTrail (this.window.getTrail());
+
+                header.clearChecksum();
+                header.setChecksum (Packet.doChecksum (skb.getRawBytes()));
+                
+/* Congestion control */
+
+		DatagramPacket pkt = new DatagramPacket (skb.getRawBytes(),
+							 0,
+							 skb.getRawBytes().length,
+							 this.send_gsr.getMulticastAddress(),
+							 this.udpEncapsulationMulticastPort);
+		try {
+			this.send_sock.send (pkt);
+		} catch (java.io.IOException e) {
+			LOG.error (e.toString());
+		}                
+                
+/* Reset SPM timer */
+                this.spm_heartbeat_state = 1;
+                this.next_heartbeat_spm = System.currentTimeMillis() + this.spm_heartbeat_interval[this.spm_heartbeat_state++];
+                
+                return true;
         }
 
 	private void cancel (Peer peer, SocketBuffer skb, long now)
