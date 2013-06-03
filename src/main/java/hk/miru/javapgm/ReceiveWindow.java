@@ -8,10 +8,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.Marker;
+import org.apache.logging.log4j.MarkerManager;
 
 public class ReceiveWindow {
     
         private static Logger LOG = LogManager.getLogger (ReceiveWindow.class.getName());
+        private static final Marker RX_WINDOW_MARKER = MarkerManager.getMarker ("RX_WINDOW");
 
 	public enum PacketState {
 		PKT_ERROR_STATE,
@@ -544,7 +547,7 @@ LOG.debug ("SKB:{} trail:{} commit:{} lead:{} (RXW_TRAIL:{})",
 			this.lead = this.lead.plus (distance);
 
 			this.cumulativeLosses += distance;
-                        LOG.info ("Data loss due to trailing edge update, fragment count {}.",
+                        LOG.trace (RX_WINDOW_MARKER, "Data loss due to trailing edge update, fragment count {}.",
                                   this.fragmentCount);
                         assert (isEmpty());
                         assert (isCommitEmpty());
@@ -630,7 +633,7 @@ LOG.debug ("SKB:{} trail:{} commit:{} lead:{} (RXW_TRAIL:{})",
 		}
                 
 		if (isFull()) {
-			LOG.debug ("Receive window full on placeholder sequence.");
+			LOG.trace (RX_WINDOW_MARKER, "Receive window full on placeholder sequence.");
 			removeTrail();
 		}
                 
@@ -640,7 +643,7 @@ LOG.debug ("SKB:{} trail:{} commit:{} lead:{} (RXW_TRAIL:{})",
 		while (!this.lead.plus (1).equals (sequence)) {
 			addPlaceholder (now, nak_rb_expiry);
 			if (isFull()) {
-				LOG.debug ("Receive window full on placeholder sequence.");
+				LOG.trace (RX_WINDOW_MARKER, "Receive window full on placeholder sequence.");
 				removeTrail();
 			}
 		}
@@ -684,7 +687,7 @@ LOG.debug ("SKB:{} trail:{} commit:{} lead:{} (RXW_TRAIL:{})",
 /* Slow consumer or fast producer */
 			if (isFull()) {
                                 assert (isCommitEmpty());
-				LOG.debug ("Receive window full on window lead advancement.");
+				LOG.trace (RX_WINDOW_MARKER, "Receive window full on window lead advancement.");
 				removeTrail();
 			}
 			addPlaceholder (now, nak_rb_expiry);
@@ -847,7 +850,7 @@ LOG.debug ("SKB:{} trail:{} commit:{} lead:{} (RXW_TRAIL:{})",
 
 		if (isFull()) {
 			if (isCommitEmpty()) {
-				LOG.debug ("Receive window full on new data, pulling trail.");
+				LOG.trace (RX_WINDOW_MARKER, "Receive window full on new data, pulling trail.");
 				removeTrail();
 			} else {
 				LOG.debug ("Receive window full with commit data.");
@@ -941,10 +944,10 @@ LOG.debug ("SKB:{} trail:{} commit:{} lead:{} (RXW_TRAIL:{})",
 		case PKT_LOST_DATA_STATE:
 /* Do not purge in situ sequence */
 			if (isCommitEmpty()) {
-				LOG.debug ("Removing lost trail from window");
+				LOG.trace (RX_WINDOW_MARKER, "Removing lost trail from window");
 				removeTrail();
 			} else {
-				LOG.debug ("Locking trail at commit window");
+				LOG.trace (RX_WINDOW_MARKER, "Locking trail at commit window");
 			}
 /* Fall through */
 		case PKT_BACK_OFF_STATE:
@@ -985,7 +988,7 @@ LOG.debug ("SKB:{} trail:{} commit:{} lead:{} (RXW_TRAIL:{})",
 /* Data-loss */
 			this.commitLead = this.commitLead.plus (1);
 			this.cumulativeLosses++;
-			LOG.debug ("Data loss due to pulled trailing edge, fragment count {}", this.fragmentCount);
+			LOG.trace (RX_WINDOW_MARKER, "Data loss due to pulled trailing edge, fragment count {}", this.fragmentCount);
 			return 1;
 		}
 		return 0;

@@ -116,7 +116,7 @@ public class Packet {
 	public static boolean parseUdpEncapsulated (SocketBuffer skb) {
                 checkNotNull (skb);
 		if (skb.getRawBytes().length < SIZEOF_PGM_HEADER) {
-                        LOG.debug ("UDP payload too small for PGM packet at {} bytes, expecting at least {} bytes.", skb.getRawBytes().length, SIZEOF_PGM_HEADER);
+                        LOG.error ("UDP payload too small for PGM packet at {} bytes, expecting at least {} bytes.", skb.getRawBytes().length, SIZEOF_PGM_HEADER);
 			return false;
 		}
 
@@ -131,16 +131,16 @@ public class Packet {
 			skb.getHeader().clearChecksum();
 			final int calculated_checksum = doChecksum (skb.getRawBytes());
 			if (source_checksum != calculated_checksum) {
-                                LOG.debug ("PGM packet checksum mismatch, reported {} whilst calculated {}.", String.format ("%#x", source_checksum), String.format ("%#x", calculated_checksum));
+                                LOG.error ("PGM packet checksum mismatch, reported {} whilst calculated {}.", String.format ("%#x", source_checksum), String.format ("%#x", calculated_checksum));
 				return false;
 			}
 		} else {
 			if (PGM_ODATA == skb.getHeader().getType()) {
-                                LOG.debug ("PGM checksum missing whilst mandatory for ODATA packets.");
+                                LOG.error ("PGM checksum missing whilst mandatory for ODATA packets.");
 				return false;
 			}
 			if (PGM_RDATA == skb.getHeader().getType()) {
-                                LOG.debug ("PGM checksum missing whilst mandatory for RDATA packets.");
+                                LOG.error ("PGM checksum missing whilst mandatory for RDATA packets.");
 				return false;
 			}
                         LOG.debug ("No PGM checksum.");

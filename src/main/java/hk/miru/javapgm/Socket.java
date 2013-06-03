@@ -47,11 +47,19 @@ import java.util.TreeMap;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.Marker;
+import org.apache.logging.log4j.MarkerManager;
 
 import javax.annotation.Nullable;
 
 public class Socket {
-        private static Logger LOG = LogManager.getLogger (Socket.class.getName());
+    
+        private Logger LOG = LogManager.getLogger (Socket.class.getName());
+        private static final Marker NETWORK_MARKER = MarkerManager.getMarker ("NETWORK");
+        private static final Marker TX_WINDOW_MARKER = MarkerManager.getMarker ("TX_WINDOW");
+        private static final Marker RX_WINDOW_MARKER = MarkerManager.getMarker ("RX_WINDOW");
+        private static final Marker RATE_CONTROL_MARKER = MarkerManager.getMarker ("RATE_CONTROL");
+        private static final Marker SESSION_MARKER = MarkerManager.getMarker ("SESSION");
 
         ProtocolFamily family = null;
         TransportSessionId tsi = null;
@@ -137,8 +145,19 @@ public class Socket {
 		IO_STATUS_CONGESTION
 	}
 
+/* Create a PGM socket object.  Can only create UDP encapsulated transports.
+ *
+ * If send == recv only two sockets need to be created iff ip headers are not
+ * required (IPv6).
+ *
+ * All receiver addresses must be the same family.
+ * interface and multiaddr must be the same family.
+ * family cannot be AF_UNSPEC!
+ */        
 	public Socket (ProtocolFamily family) throws IOException
 	{
+                LOG.debug ("Socket (family: {})", family);
+                
                 this.family = family;
                 this.canSendData = true;
                 this.canSendNak = true;
@@ -146,11 +165,15 @@ public class Socket {
                 this.dataDestinationPort = Packet.DEFAULT_DATA_DESTINATION_PORT;
                 this.tsi = new TransportSessionId (null, Packet.DEFAULT_DATA_SOURCE_PORT);
 
+                LOG.trace (NETWORK_MARKER, "Opening UDP encapsulated sockets.");
 		this.recv_sock = DatagramChannel.open (this.family);
+                LOG.trace (NETWORK_MARKER, "Set socket sharing.");
                 this.recv_sock.setOption (StandardSocketOptions.SO_REUSEADDR, true);
                 this.recv_sock.configureBlocking (false);
 
 		this.send_sock = new MulticastSocket ();
+                
+                LOG.debug ("PGM socket successfully created.");
         }
 
 /* Timeout for pending timer */
@@ -165,7 +188,31 @@ public class Socket {
                 checkArgument (false);
                 return 0;
         }
+        
+        public int getMaximumTpdu() {
+                return this.max_tpdu;
+        }
+        
+        public long getPeerExpiration() {
+                return this.peerExpiration;
+        }
+        
+        public long getSpmRequestExpiration() {
+                return this.spmrExpiration;
+        }
+        
+        public int getReceiveWindowSizeInSequenceNumbers() {
+                return this.rxw_sqns;
+        }
 
+        public int getReceiveWindowSizeInSeconds() {
+                return this.rxw_secs;
+        }
+        
+        public long getMaximumReceiveRate() {
+                return this.rxw_max_rte;
+        }
+        
         public boolean setOption (int optname, Object optval) throws java.net.SocketException, IOException {
                 if (this.isConnected || this.isDestroyed)
                         return false;
@@ -439,9 +486,10 @@ public class Socket {
                         {
                                 hk.miru.javapgm.GroupRequest gr = (hk.miru.javapgm.GroupRequest)optval;
                                 this.send_gsr = new hk.miru.javapgm.GroupSourceRequest (gr.getNetworkInterfaceIndex(), gr.getMulticastAddress(), null);
-                                int if_index = gr.getNetworkInterfaceIndex();
-                                this.send_sock.setNetworkInterface (NetworkInterface.getByIndex (if_index));
-                                LOG.info ("Multicast send interface set to index {}", gr.getNetworkInterfaceIndex());
+                                final NetworkInterface send_ni = NetworkInterface.getByIndex (gr.getNetworkInterfaceIndex());
+                                this.send_sock.setNetworkInterface (send_ni);
+                                LOG.trace (NETWORK_MARKER, "Multicast send interface set to {} index {}",
+                                           send_ni, gr.getNetworkInterfaceIndex());
                         }
                         return true;
 
@@ -454,7 +502,8 @@ public class Socket {
                                 hk.miru.javapgm.GroupSourceRequest gsr = new hk.miru.javapgm.GroupSourceRequest (gr.getNetworkInterfaceIndex(), gr.getMulticastAddress(), null);
                                 MembershipKey key = this.recv_sock.join (gr.getMulticastAddress(), NetworkInterface.getByIndex (gr.getNetworkInterfaceIndex()));
                                 this.recv_gsr.put (gsr, key);
-                                LOG.info ("Join multicast group {} on interface index {}", gr.getMulticastAddress(), gr.getNetworkInterfaceIndex());
+                                LOG.trace (NETWORK_MARKER, "Join multicast group {} on interface index {}",
+                                           gr.getMulticastAddress(), gr.getNetworkInterfaceIndex());
                         }
                         return true;
 
@@ -504,7 +553,7 @@ public class Socket {
                         {
                                 hk.miru.javapgm.GroupSourceRequest gsr = (hk.miru.javapgm.GroupSourceRequest)optval;
                                 MembershipKey key = this.recv_sock.join (gsr.getMulticastAddress(), NetworkInterface.getByIndex (gsr.getNetworkInterfaceIndex()), gsr.getSourceAddress());
-                                LOG.info ("Join multicast group {} on interface index {} for source {}",
+                                LOG.debug ("Join multicast group {} on interface index {} for source {}",
                                           gsr.getMulticastAddress(), gsr.getNetworkInterfaceIndex(), gsr.getSourceAddress());
                                 this.recv_gsr.put (gsr, key);
                         }
@@ -555,6 +604,10 @@ public class Socket {
                 return false;
         }
 
+/* Bind the sockets to the link layer to start receiving data.
+ *
+ * Returns TRUE on success, or FALSE on error and sets error appropriately,
+ */        
         public boolean bind (hk.miru.javapgm.SocketAddress sockaddr, @Nullable InterfaceRequest send_req, @Nullable InterfaceRequest recv_req)
         {
                 checkNotNull (sockaddr);
@@ -564,48 +617,62 @@ public class Socket {
 
 /* Sanity checks on state */
                 if (this.max_tpdu < (Packet.SIZEOF_IP_HEADER + Packet.SIZEOF_PGM_HEADER)) {
+                        LOG.error ("Invalid maximum TPDU size.");
                         return false;
                 }
                 if (this.canSendData) {
                         if (0 == this.spm_ambient_interval) {
+                                LOG.error ("SPM ambient interval not configured.");
                                 return false;
                         }
                         if (0 == this.spm_heartbeat_interval.length) {
+                                LOG.error ("SPM heartbeat interval not configured.");
                                 return false;
                         }
                         if (0 == this.txw_sqns && 0 == this.txw_secs) {
+                                LOG.error ("TXW_SQNS not configured.");
                                 return false;
                         }
                         if (0 == this.txw_sqns && 0 == this.txw_max_rte) {
+                                LOG.error ("TXW_MAX_RTE not configured.");
                                 return false;
                         }
                 }
                 if (this.canReceiveData) {
                         if (0 == this.rxw_sqns && 0 == this.rxw_secs) {
+                                LOG.error ("RXW_SQNS not configured.");
                                 return false;
                         }
                         if (0 == this.rxw_sqns && 0 == this.rxw_max_rte) {
+                                LOG.error ("RXW_MAX_RTE not configured.");
                                 return false;
                         }
                         if (0 == this.peerExpiration) {
+                                LOG.error ("Peer timeout not configured.");
                                 return false;
                         }
                         if (0 == this.spmrExpiration) {
+                                LOG.error ("SPM-Request timeout not configured.");
                                 return false;
                         }
                         if (0 == this.nak_bo_ivl) {
+                                LOG.error ("NAK_BO_IVL not configured.");
                                 return false;
                         }
                         if (0 == this.nak_rpt_ivl) {
+                                LOG.error ("NAK_RPT_IVL not configured.");
                                 return false;
                         }
                         if (0 == this.nak_rdata_ivl) {
+                                LOG.error ("NAK_RDATA_IVL not configured.");
                                 return false;
                         }
                         if (0 == this.nak_data_retries) {
+                                LOG.error ("NAK_DATA_RETRIES not configured.");
                                 return false;
                         }
                         if (0 == this.nak_ncf_retries) {
+                                LOG.error ("NAK_NCF_RETRIES not configured.");
                                 return false;
                         }
                 }
@@ -629,7 +696,7 @@ public class Socket {
                         this.iphdr_len = Packet.SIZEOF_IP_HEADER;
                 else
                         this.iphdr_len = Packet.SIZEOF_IP6_HEADER;
-                LOG.info ("Assuming IP header size of {} bytes", this.iphdr_len);
+                LOG.trace (NETWORK_MARKER, "Assuming IP header size of {} bytes", this.iphdr_len);
 
                 ProtocolFamily pgmcc_family = null;
                 this.max_tsdu = this.max_tpdu - this.iphdr_len - Packet.calculateOffset (false, pgmcc_family);
@@ -638,7 +705,7 @@ public class Socket {
                 this.max_apdu = Math.min (Packet.PGM_MAX_APDU, max_fragments * this.max_tsdu_fragment);
 
                 if (this.canSendData) {
-                        LOG.info ("Create transmit window.");
+                        LOG.trace (TX_WINDOW_MARKER, "Create transmit window.");
                         this.window = this.txw_sqns > 0 ?
                                         new TransmitWindow (this.tsi,
                                                             0,
@@ -676,17 +743,17 @@ public class Socket {
 /* TODO: No IPv6 wildcard support */
                         recv_addr = new InetSocketAddress ("::", this.udpEncapsulationMulticastPort);
                         send_addr = new InetSocketAddress ("::", 0);
-                        LOG.info ("Binding receive socket to IN6ADDR_ANY");
+                        LOG.trace (NETWORK_MARKER, "Binding receive socket to IN6ADDR_ANY");
                 } else {
                         recv_addr = new InetSocketAddress ("0.0.0.0", this.udpEncapsulationMulticastPort);
                         send_addr = new InetSocketAddress ("0.0.0.0", 0);
-                        LOG.info ("Binding receive socket to INADDR_ANY");
+                        LOG.trace (NETWORK_MARKER, "Binding receive socket to INADDR_ANY");
                 }
 
 /* UDP port */
                 try {
                         this.recv_sock.bind (recv_addr);
-                        LOG.info ("Bind succeeded on receive address {}", recv_addr);
+                        LOG.debug (NETWORK_MARKER, "Bind succeeded on recv_gsr[0] interface {}", recv_addr);
                 } catch (IOException ex) {
                         LOG.error ("Binding receive socket to address {}: {}", recv_addr, ex);
                         return false;
@@ -698,9 +765,11 @@ public class Socket {
  * and thus a unique NetworkInterface instance.
  */
                 if (StandardProtocolFamily.INET6 == this.family) {
-                        LOG.info ("Binding send socket to interface index {} scope {}", send_req.getNetworkInterfaceIndex(), send_req.getScopeId());
+                        LOG.trace (NETWORK_MARKER, "Binding send socket to interface index {} scope {}",
+                                   send_req.getNetworkInterfaceIndex(), send_req.getScopeId());
                 } else {
-                        LOG.info ("Binding send socket to interface index {}", send_req.getNetworkInterfaceIndex());
+                        LOG.trace (NETWORK_MARKER, "Binding send socket to interface index {}",
+                                   send_req.getNetworkInterfaceIndex());
                 }
 
                 try {
@@ -728,7 +797,6 @@ public class Socket {
 
 /* Resolve bound address if wildcard */
                 if (send_addr.getAddress().isAnyLocalAddress()) {
-                    System.out.println ("resolving send addr...");
                         InetAddress addr;
                         try {
                                 addr = hk.miru.javapgm.NetworkInterface.getMulticastEnabledNodeAddress (this.family);
@@ -739,7 +807,7 @@ public class Socket {
                         send_addr = new InetSocketAddress (addr, send_addr.getPort());
                 }
 
-                LOG.debug ("Bind succeeded on send_gsr interface {}", send_addr);
+                LOG.debug (NETWORK_MARKER, "Bind succeeded on send_gsr interface {}", send_addr);
 
 /* Save send side address for broadcasting as source NLA */
                 this.send_addr = send_addr.getAddress();
@@ -747,7 +815,8 @@ public class Socket {
                 if (this.canSendData) {
 /* Setup rate control */
                         if (this.txw_max_rte > 0) {
-                                LOG.info ("Setting rate regulation to {} bytes per second.", this.txw_max_rte);
+                                LOG.trace (RATE_CONTROL_MARKER, "Setting rate regulation to {} bytes per second.",
+                                           this.txw_max_rte);
                                 this.rate_control = new RateControl (this.txw_max_rte, this.iphdr_len, this.max_tpdu);
                                 this.has_controlled_spm = true;     /* Must always be set */
                         } else {
@@ -755,12 +824,14 @@ public class Socket {
                         }
 
                         if (this.odata_max_rte > 0) {
-                                LOG.info ("Setting ODATA rate regulation to {} bytes per second", this.odata_max_rte);
+                                LOG.trace (RATE_CONTROL_MARKER, "Setting ODATA rate regulation to {} bytes per second",
+                                           this.odata_max_rte);
                                 this.odata_rate_control = new RateControl (this.odata_max_rte, this.iphdr_len, this.max_tpdu);
                                 this.has_controlled_odata = true;
                         }
                         if (this.rdata_max_rte > 0) {
-                                LOG.info ("Setting RDATA rate regulation to {} bytes per second", this.rdata_max_rte);
+                                LOG.trace (RATE_CONTROL_MARKER, "Setting RDATA rate regulation to {} bytes per second",
+                                           this.rdata_max_rte);
                                 this.rdata_rate_control = new RateControl (this.rdata_max_rte, this.iphdr_len, this.max_tpdu);
                                 this.has_controlled_rdata = true;
                         }
@@ -812,6 +883,12 @@ public class Socket {
                 return this.recv_sock.register (selector, op);
         }
 
+/* Send one APDU, whether it fits within one TPDU or more.
+ *
+ * On success, returns PGM_IO_STATUS_NORMAL, on block for non-blocking sockets
+ * returns PGM_IO_STATUS_WOULD_BLOCK, returns PGM_IO_STATUS_RATE_LIMITED if
+ * packet size exceeds the current rate limit.
+ */        
         public IoStatus send (byte[] apdu, int offset, int apdu_length) {
                 LOG.debug ("send");
 
@@ -827,6 +904,23 @@ public class Socket {
                 }
         }
 
+/* Data incoming on receive sockets, can be from a sender or receiver, or simply bogus.
+ * For IPv4 we receive the IP header to handle fragmentation, for IPv6 we cannot, but the
+ * underlying stack handles this for us.
+ *
+ * recvmsgv reads a vector of apdus each contained in a IO scatter/gather array.
+ *
+ * Can be called due to event from incoming socket(s) or timer induced data loss.
+ *
+ * On success, returns PGM_IO_STATUS_NORMAL and saves the count of bytes read
+ * into _bytes_read.  With non-blocking sockets a block returns
+ * PGM_IO_STATUS_WOULD_BLOCK.  When rate limited sending repair data, returns
+ * PGM_IO_STATUS_RATE_LIMITED and caller should wait.  During recovery state,
+ * returns PGM_IO_STATUS_TIMER_PENDING and caller should also wait.  On
+ * unrecoverable dataloss, returns PGM_IO_STATUS_CONN_RESET.  If connection is
+ * closed, returns PGM_IO_STATUS_EOF.  On error, returns PGM_IO_STATUS_ERROR.
+ */
+        
 	public IoStatus receive (List<SocketBuffer> skbs) throws IOException {
 		IoStatus status = IoStatus.IO_STATUS_WOULD_BLOCK;
 
@@ -888,10 +982,10 @@ public class Socket {
 				this.buffer.get (this.rx_buffer.getRawBytes(), 0, this.rx_buffer.getRawBytes().length);
 				this.buffer.clear();
 /* Rx testing */
-if (false && (Math.random() < 0.25)) {
-	LOG.info ("Dropping packet.");
-	continue;
-}
+                                if (false && (Math.random() < 0.25)) {
+                                        LOG.debug ("Simulated packet loss");
+                                        continue;
+                                }
 				if (!Packet.parseUdpEncapsulated (this.rx_buffer))
 					break;
 				this.source[0] = null;
@@ -899,7 +993,7 @@ if (false && (Math.random() < 0.25)) {
 					break;
 /* Check whether this source has waiting data */
 				if (null != this.source[0] && this.source[0].hasPending()) {
-					LOG.info ("New pending data.");
+					LOG.trace (RX_WINDOW_MARKER, "New pending data.");
 					this.peers_pending.addFirst (this.source[0]);
 					this.source[0].setPendingLinkData();
 				}
@@ -944,21 +1038,21 @@ if (false && (Math.random() < 0.25)) {
 		)
 	{
 		if (!this.canSendData) {
-			LOG.info ("Discarded packet for muted source.");
+			LOG.trace (NETWORK_MARKER, "Discarded packet for muted source.");
 			return false;
 		}
 
 /* Unicast upstream message, note that dport & sport are reversed */                
 		if (skb.getHeader().getSourcePort() != this.dataDestinationPort) {
 /* It is an upstream/peer-to-peer for another session */                    
-			LOG.info ("Discarded packet on data-destination port mismatch.");
-			LOG.info ("Data-destination port: {}", skb.getHeader().getDestinationPort());
+			LOG.trace (NETWORK_MARKER, "Discarded packet on data-destination port mismatch.");
+			LOG.debug ("Data-destination port: {}", skb.getHeader().getDestinationPort());
 			return false;
 		}
                 
                 if (!skb.getHeader().getTransportSessionId().getGlobalSourceId().equals (this.tsi.getGlobalSourceId())) {
 /* It is an upstream/peer-to-peer for another session */                    
-                        LOG.info ("Discarded packet on GSI mismatch.");
+                        LOG.trace (NETWORK_MARKER, "Discarded packet on GSI mismatch.");
                         return false;
                 }
 
@@ -988,7 +1082,7 @@ if (false && (Math.random() < 0.25)) {
                     
                 case Packet.PGM_POLR:
 		default:
-			LOG.info ("Discarded unsupported PGM type packet.");
+			LOG.trace (NETWORK_MARKER, "Discarded unsupported PGM type packet.");
 			return false;
 		}
 
@@ -1020,15 +1114,24 @@ if (false && (Math.random() < 0.25)) {
 		Peer[] source
 		)
 	{
+/* Pre-conditions */
+                assert (null != skb);
+                assert (null != sourceAddress);
+                assert (null != destinationAddress);
+                assert (null != source);
+            
+                if (LOG.isDebugEnabled())
+                        LOG.debug ("onDownstream");
+                
 		if (!this.canReceiveData) {
-			LOG.info ("Discarded packet for muted receiver.");
+			LOG.trace (NETWORK_MARKER, "Discarded packet for muted receiver.");
 			return false;
 		}
 
 /* PGM packet DPORT contains our sock DPORT */                
 		if (skb.getHeader().getDestinationPort() != this.dataDestinationPort) {
-			LOG.info ("Discarded packet on data-destination port mismatch.");
-			LOG.info ("Data-destination port: {}", skb.getHeader().getDestinationPort());
+			LOG.trace (NETWORK_MARKER, "Discarded packet on data-destination port mismatch.");
+			LOG.debug ("Data-destination port: {}", skb.getHeader().getDestinationPort());
 			return false;
 		}
 
@@ -1036,7 +1139,7 @@ if (false && (Math.random() < 0.25)) {
 		TransportSessionId tsi = skb.getHeader().getTransportSessionId();
 		source[0] = this.peers_hashtable.get (tsi);
 		if (null == source[0]) {
-			source[0] = new Peer (tsi, this.max_tpdu, this.rxw_sqns, this.rxw_secs, this.rxw_max_rte);
+			source[0] = new Peer (this, tsi, sourceAddress, destinationAddress, skb.getTimestamp());
 			this.peers_hashtable.put (tsi, source[0]);
 		}
 
@@ -1047,7 +1150,6 @@ if (false && (Math.random() < 0.25)) {
 /* Handle PGM packet type */                
 		switch (skb.getHeader().getType()) {
 		case Packet.PGM_RDATA:
-			LOG.info ("********* REPAIR DATA ***************");
 		case Packet.PGM_ODATA:
 			if (!this.onData (source[0], skb))
 				return false;
@@ -1068,13 +1170,17 @@ if (false && (Math.random() < 0.25)) {
 
                 case Packet.PGM_POLL:
 		default:
-			LOG.info ("Discarded unsupported PGM type packet.");
+			LOG.trace (NETWORK_MARKER, "Discarded unsupported PGM type packet.");
 			return false;
 		}
 
 		return true;
 	}
 
+/* Process a pgm packet
+ *
+ * Returns TRUE on valid processed packet, returns FALSE on discarded packet.
+ */        
 	private boolean onPgm (
 		SocketBuffer skb,
 		InetAddress sourceAddress,
@@ -1082,6 +1188,15 @@ if (false && (Math.random() < 0.25)) {
 		Peer[] source			/* reference to a peer */
 		)
 	{
+/* Pre-conditions */
+                assert (null != skb);
+                assert (null != sourceAddress);
+                assert (null != destinationAddress);
+                assert (null != source);
+                
+                if (LOG.isDebugEnabled())
+                        LOG.debug ("onPgm");
+                
 		if (skb.getHeader().isDownstream())
 			return this.onDownstream (skb, sourceAddress, destinationAddress, source);
 		if (skb.getHeader().getDestinationPort() == this.tsi.getSourcePort())
@@ -1094,16 +1209,21 @@ if (false && (Math.random() < 0.25)) {
 		else if (skb.getHeader().isPeer())
 			return this.onPeer (skb, sourceAddress, destinationAddress);
 
-		LOG.info ("Discarded unknown PGM packet.");
+		LOG.trace (NETWORK_MARKER, "Discarded unknown PGM packet.");
 		return false;
 	}
 
+/* SPM indicate start of a session, continued presence of a session, or flushing final packets
+ * of a session.
+ *
+ * Returns TRUE on valid packet, FALSE on invalid packet or duplicate SPM sequence number.
+ */        
 	private boolean onSourcePathMessage (
 		Peer source,
 		SocketBuffer skb
 		)
 	{
-		LOG.info ("onSourcePathMessage");
+		LOG.debug ("onSourcePathMessage");
 
 		SourcePathMessage spm = new SourcePathMessage (skb, skb.getDataOffset());
 
@@ -1139,7 +1259,7 @@ if (false && (Math.random() < 0.25)) {
 		}
 		else
 		{	/* does not advance SPM sequence number */
-			LOG.info ("Discarded duplicate SPM.");
+			LOG.trace (NETWORK_MARKER, "Discarded duplicate SPM.");
 			return false;
 		}
 
@@ -1149,15 +1269,29 @@ if (false && (Math.random() < 0.25)) {
 		return true;
 	}
         
+/* NCF confirming receipt of a NAK from this sock or another on the LAN segment.
+ *
+ * Packet contents will match exactly the sent NAK, although not really that helpful.
+ *
+ * If NCF is valid, returns TRUE.  on error, FALSE is returned.
+ */        
 	private boolean onNakConfirm (
 		Peer source,
 		SocketBuffer skb
 		)
 	{
-                LOG.info ("onNakConfirm");
+                LOG.debug ("onNakConfirm");
 		return true;
 	}
 
+/* ODATA or RDATA packet with any of the following options:
+ *
+ * OPT_FRAGMENT - this TPDU part of a larger APDU.
+ *
+ * Ownership of skb is taken and must be passed to the receive window or destroyed.
+ *
+ * Returns TRUE is skb has been replaced, FALSE is remains unchanged and can be recycled.
+ */        
 	private boolean onData (
 		Peer source,
 		SocketBuffer skb
@@ -1166,7 +1300,7 @@ if (false && (Math.random() < 0.25)) {
 		int msgCount = 0;
 		boolean flushNaks = false;
 
-		LOG.info ("onData");
+		LOG.debug ("onData");
 
 		final long nakBackoffExpiration = skb.getTimestamp() + calculateNakRandomBackoffInterval();
 
@@ -1181,7 +1315,7 @@ if (false && (Math.random() < 0.25)) {
 			Packet.parseOptionExtensions (skb, skb.getDataOffset());
 
 		final ReceiveWindow.Returns addStatus = source.add (skb, skb.getTimestamp(), nakBackoffExpiration);
-LOG.info ("ReceiveWindow.add returned " + addStatus);
+LOG.debug ("ReceiveWindow.add returned " + addStatus);
 
 		switch (addStatus) {
 		case RXW_MISSING:
@@ -1253,10 +1387,10 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
                 
                 if (null == peer) {
                         if (!sendSpm (0)) {
-                                LOG.info ("Failed to send SPM on SPM-Request.");
+                                LOG.trace (NETWORK_MARKER, "Failed to send SPM on SPM-Request.");
                         }
                 } else {
-                        LOG.info ("Suppressing SPMR due to peer multicast SPMR.");
+                        LOG.trace (RX_WINDOW_MARKER, "Suppressing SPMR due to peer multicast SPMR.");
                         peer.clearSpmrExpiration();
                 }
                 return true;
@@ -1284,13 +1418,13 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
                 
 /* NAK_SRC_NLA contains our sock unicast NLA */
                 if (!nak.getNakSourceNla().equals (this.send_addr)) {
-                        LOG.info ("NAK rejected for unmatched NLA: {}", nak.getNakSourceNla());
+                        LOG.trace (NETWORK_MARKER, "NAK rejected for unmatched NLA: {}", nak.getNakSourceNla());
                         return false;
                 }
                 
 /* NAK_GRP_NLA contains our sock multicast group */
                 if (!nak.getNakGroupNla().equals (this.send_gsr.getMulticastAddress())) {
-                        LOG.info ("NAK rejected as targeted for different multicast group: {}", nak.getNakGroupNla());
+                        LOG.trace (NETWORK_MARKER, "NAK rejected as targeted for different multicast group: {}", nak.getNakGroupNla());
                         return false;
                 }
                 
@@ -1308,7 +1442,7 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
                 
 /* NAK list numbers */
                 if (sqn_list.size() > 62) {
-                        LOG.info ("Malformed NAK rejected on sequence list overrun, {} reported NAKs.", sqn_list.size());
+                        LOG.trace (NETWORK_MARKER, "Malformed NAK rejected on sequence list overrun, {} reported NAKs.", sqn_list.size());
                         return false;
                 }
                 
@@ -1325,7 +1459,7 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
 /* Queue retransmit requests */
                 for (SequenceNumber nak_sqn : sqn_list) {
                         if (!this.window.pushRetransmit (nak_sqn)) {
-                                LOG.debug ("Failed to push retransmit request for {}.", nak_sqn);
+                                LOG.trace (TX_WINDOW_MARKER, "Failed to push retransmit request for {}.", nak_sqn);
                         }
                 }                
                 return true;
@@ -1355,7 +1489,7 @@ LOG.info ("ReceiveWindow.add returned " + addStatus);
 			List<SocketBuffer> skbs
 			)
 	{
-LOG.info ("flushPeersPending");
+LOG.debug ("flushPeersPending");
 		int bytes_read = 0;
 		int data_read = 0;
 		ListIterator<Peer> it = this.peers_pending.listIterator();
@@ -1388,7 +1522,7 @@ LOG.info ("flushPeersPending");
 	{
 		final long now = System.currentTimeMillis();
 		final boolean hasExpired = now >= this.nextPoll;
-LOG.info ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
+LOG.debug ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
 		return hasExpired;
 	}
 
@@ -1411,7 +1545,7 @@ LOG.info ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
 		final long now = System.currentTimeMillis();
 		long nextExpiration = 0;
 
-		LOG.info ("timerDispatch");
+		LOG.debug ("timerDispatch");
 
 /* Find which timers have expired and call each */
 		if (this.canReceiveData) {
@@ -1474,9 +1608,14 @@ LOG.debug ("nextExpiration:{} this.nextPoll:{}", nextExpiration, this.nextPoll);
 		return true;
 	}
 
+/* Check this peer for NAK state timers, uses the tail of each queue for the nearest
+ * timer execution.
+ *
+ * Returns TRUE on complete sweep, returns FALSE if operation would block.
+ */        
 	private boolean checkPeerState (long now)
 	{
-		LOG.info ("checkPeerState");
+		LOG.debug ("checkPeerState");
 
 		if (this.peers_hashtable.isEmpty())
 			return true;
@@ -1516,17 +1655,17 @@ LOG.debug ("nextExpiration:{} this.nextPoll:{}", nextExpiration, this.nextPoll);
 			{
 				if (peer.hasPendingLinkData())
 				{
-					LOG.info ("Peer expiration postponed due to committing data.");
+					LOG.trace (SESSION_MARKER, "Peer expiration postponed due to committing data.");
 					peer.setExpiration (peer.getExpiration() + this.peerExpiration);
 				}
 				else if (peer.hasCommitData())
 				{
-					LOG.info ("Peer expiration postoned due to comitted data.");
+					LOG.trace (SESSION_MARKER, "Peer expiration postoned due to comitted data.");
 					peer.setExpiration (peer.getExpiration() + this.peerExpiration);
 				}
 				else
 				{
-					LOG.info ("Peer expired.");
+					LOG.trace (SESSION_MARKER, "Peer expired, tsi {}", peer.getTransportSessionId());
 					this.peers_hashtable.remove (peer.getTransportSessionId());
 					peer = null;
 				}
@@ -1536,16 +1675,21 @@ LOG.debug ("nextExpiration:{} this.nextPoll:{}", nextExpiration, this.nextPoll);
 /* check for waiting contiguous packets */
 		if (!this.peers_pending.isEmpty() && !this.hasPendingRead)
 		{
-			LOG.info ("Signal receiver thread.");
+			LOG.debug ("Signal receiver thread.");
 			this.hasPendingRead = true;
 		}
 
 		return true;
 	}
 
+/* Find the next state expiration time among the socks peers.
+ *
+ * On success, returns the earliest of the expiration parameter or next
+ * peer expiration time.
+ */        
 	private long minReceiverExpiration (long expiration)
 	{
-		LOG.info ("minReceiverExpiration");
+		LOG.debug ("minReceiverExpiration");
 
 		if (this.peers_hashtable.isEmpty())
 			return expiration;
@@ -1556,28 +1700,28 @@ LOG.debug ("nextExpiration:{} this.nextPoll:{}", nextExpiration, this.nextPoll);
 			if (peer.hasSpmrExpiration() &&
 			    expiration >= peer.getSpmrExpiration())
 			{
-LOG.info ("Next expiration: SPMR");
+LOG.debug ("Next expiration: SPMR");
 				expiration = peer.getSpmrExpiration();
 			}
 
 			if (!peer.getNakBackoffQueue().isEmpty() &&
 			    expiration >= peer.firstNakBackoffExpiration())
 			{
-LOG.info ("Next expiration: NAK backoff");
+LOG.debug ("Next expiration: NAK backoff");
 				expiration = peer.firstNakBackoffExpiration();
 			}
 
 			if (!peer.getWaitNakConfirmQueue().isEmpty() &&
 			    expiration >= peer.firstNakRepeatExpiration())
 			{
-LOG.info ("Next expiration: NAK repeat");
+LOG.debug ("Next expiration: NAK repeat");
 				expiration = peer.firstNakRepeatExpiration();
 			}
 
 			if (!peer.getWaitDataQueue().isEmpty() &&
 			    expiration >= peer.firstRepairDataExpiration())
 			{
-LOG.info ("Next expiration: RDATA");
+LOG.debug ("Next expiration: RDATA");
 				expiration = peer.firstRepairDataExpiration();
 			}
 		}
@@ -1585,15 +1729,22 @@ LOG.info ("Next expiration: RDATA");
 		return expiration;
 	}
 
+/* Check all receiver windows for packets in BACK-OFF_STATE, on expiration send a NAK.
+ * update sock::next_nak_rb_timestamp for next expiration time.
+ *
+ * Peer object is locked before entry.
+ *
+ * Returns TRUE on success, returns FALSE if operation would block.
+ */        
 	private boolean nakBackoffState (Peer peer, long now)
 	{
 		int droppedInvalid = 0;
 
-		LOG.info ("nakBackoffState");
+		LOG.debug ("nakBackoffState");
 
 		Queue<SocketBuffer> nakBackoffQueue = peer.getNakBackoffQueue();
 		if (nakBackoffQueue.isEmpty()) {
-			LOG.info ("Backoff queue is empty in nak_rb_state.");
+			LOG.trace (RX_WINDOW_MARKER, "Backoff queue is empty in nak_rb_state.");
 			return true;
 		}
 
@@ -1604,7 +1755,7 @@ LOG.info ("Next expiration: RDATA");
 
 /* select NAK generation */
 
-LOG.info ("nakBackoffQueue contains {} SKBs.", nakBackoffQueue.size());
+LOG.debug ("nakBackoffQueue contains {} SKBs.", nakBackoffQueue.size());
 			for (Iterator<SocketBuffer> it = nakBackoffQueue.iterator(); it.hasNext();)
 			{
 				SocketBuffer skb = it.next();
@@ -1623,7 +1774,7 @@ LOG.info ("nakBackoffQueue contains {} SKBs.", nakBackoffQueue.size());
 					ReceiveWindow.incrementNakTransmitCount (skb);
 
 					ReceiveWindow.setNakRepeatExpiration (skb, now + this.nak_rpt_ivl);
-					LOG.info ("nak_rpt_expiry in {} seconds.", ((ReceiveWindow.getNakRepeatExpiration (skb) - now) / 1000));
+					LOG.trace (NETWORK_MARKER, "nak_rpt_expiry in {} seconds.", ((ReceiveWindow.getNakRepeatExpiration (skb) - now) / 1000));
 					if (this.nextPoll > ReceiveWindow.getNakRepeatExpiration (skb))
 						this.nextPoll = ReceiveWindow.getNakRepeatExpiration (skb);
 
@@ -1635,7 +1786,7 @@ LOG.info ("nakBackoffQueue contains {} SKBs.", nakBackoffQueue.size());
 				}
 				else
 				{	/* packet expires some time later */
-LOG.info ("SKB expiration now + {}", (ReceiveWindow.getNakBackoffExpiration (skb) - now));
+LOG.debug ("SKB expiration now + {}", (ReceiveWindow.getNakBackoffExpiration (skb) - now));
 					break;
 				}
 			}
@@ -1650,7 +1801,7 @@ LOG.info ("SKB expiration now + {}", (ReceiveWindow.getNakBackoffExpiration (skb
 
 		if (droppedInvalid > 0)
 		{
-			LOG.info ("Dropped {} messages due to invalid NLA.", droppedInvalid);
+			LOG.trace (RX_WINDOW_MARKER, "Dropped {} messages due to invalid NLA.", droppedInvalid);
 
 			if (peer.hasDataLoss() &&
 			    !peer.hasPendingLinkData())
@@ -1663,25 +1814,28 @@ LOG.info ("SKB expiration now + {}", (ReceiveWindow.getNakBackoffExpiration (skb
 
 		if (!nakBackoffQueue.isEmpty()) {
 			final long secs = (peer.firstNakBackoffExpiration() - now) / 1000;
-			LOG.info ("Next expiration set in {} seconds.", secs);
+			LOG.trace (NETWORK_MARKER, "Next expiration set in {} seconds.", secs);
 		} else {
-			LOG.info ("NAK backoff queue empty.");
+			LOG.trace (RX_WINDOW_MARKER, "NAK backoff queue empty.");
 		}
 		return true;
 	}
 
+/* Check WAIT_NCF_STATE, on expiration move back to BACK-OFF_STATE, on exceeding NAK_NCF_RETRIES
+ * cancel the sequence number.
+ */        
 	private void nakRepeatState (Peer peer, long now)
 	{
 		int droppedInvalid = 0;
 		int dropped = 0;
 
-		LOG.info ("NakRepeatState");
+		LOG.debug ("NakRepeatState");
 
 		Queue<SocketBuffer> waitNakConfirmQueue = peer.getWaitNakConfirmQueue();
 
 		final boolean isValidNla = peer.hasValidNla();
 
-LOG.info ("waitNcfQueue contains {} SKBs.", waitNakConfirmQueue.size());
+LOG.debug ("waitNcfQueue contains {} SKBs.", waitNakConfirmQueue.size());
 		for (Iterator<SocketBuffer> it = waitNakConfirmQueue.iterator(); it.hasNext();)
 		{
 			SocketBuffer skb = it.next();
@@ -1708,7 +1862,7 @@ LOG.info ("waitNcfQueue contains {} SKBs.", waitNakConfirmQueue.size());
 /* retry */
 					ReceiveWindow.setNakBackoffExpiration (skb, now + calculateNakRandomBackoffInterval());
 					peer.setBackoffState (skb);
-					LOG.info ("NCF retry #{} attempt {}/{}.",
+					LOG.trace (RX_WINDOW_MARKER, "NCF retry #{} attempt {}/{}.",
                                                    skb.getSequenceNumber(),
                                                    ReceiveWindow.getNcfRetryCount (skb),
                                                    this.nak_ncf_retries);
@@ -1718,16 +1872,16 @@ LOG.info ("waitNcfQueue contains {} SKBs.", waitNakConfirmQueue.size());
 			{
 /* packet expires some time later */
 				final long seconds = (ReceiveWindow.getNakRepeatExpiration (skb) - now) / 1000;
-				LOG.info ("NCF retry #{} is delayed {} seconds.",
+				LOG.trace (RX_WINDOW_MARKER, "NCF retry #{} is delayed {} seconds.",
                                            skb.getSequenceNumber(), seconds);
 			}
 		}
 
 		if (droppedInvalid > 0)
-			LOG.info ("Dropped {} message due to invalid NLA.", droppedInvalid);
+			LOG.trace (RX_WINDOW_MARKER, "Dropped {} message due to invalid NLA.", droppedInvalid);
 
 		if (dropped > 0)
-			LOG.info ("Dropped messages due to NCF cancellation.", dropped);
+			LOG.trace (RX_WINDOW_MARKER, "Dropped messages due to NCF cancellation.", dropped);
 
 		if (peer.hasDataLoss() &&
 		    !peer.hasPendingLinkData())
@@ -1741,41 +1895,45 @@ LOG.info ("waitNcfQueue contains {} SKBs.", waitNakConfirmQueue.size());
 		{
 			if (peer.firstNakRepeatExpiration() > now) {
 				final long seconds = (peer.firstNakRepeatExpiration() - now) / 1000;
-				LOG.info ("Next expiration set in {} seconds.", seconds);
+				LOG.trace (NETWORK_MARKER, "Next expiration set in {} seconds.", seconds);
 			} else {
 				final long seconds = (now - peer.firstNakRepeatExpiration()) / 1000;
-				LOG.info ("Next expiration set in -{} seconds.", seconds);
+				LOG.trace (NETWORK_MARKER, "Next expiration set in -{} seconds.", seconds);
 			}
 		}
 		else
 		{
-			LOG.info ("Wait NCF queue empty.");
+			LOG.trace (RX_WINDOW_MARKER, "Wait NCF queue empty.");
 		}
 	}
 
+/* Check WAIT_DATA_STATE, on expiration move back to BACK-OFF_STATE, on exceeding NAK_DATA_RETRIES
+ * canel the sequence number.
+ */        
 	private void nakRepairDataState (Peer peer, long now)
 	{
 		int droppedInvalid = 0;
 		int dropped = 0;
 
-		LOG.info ("nakRepairDataState");
+		LOG.debug ("nakRepairDataState");
 
 		Queue<SocketBuffer> waitDataQueue = peer.getWaitDataQueue();
 
+/* Have not learned this peers NLA */                
 		final boolean isValidNla = peer.hasValidNla();
 
-LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
+LOG.debug ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		for (Iterator<SocketBuffer> it = waitDataQueue.iterator(); it.hasNext();)
 		{
 			SocketBuffer skb = it.next();
 
-/* check this packet for state expiration */
+/* Check this packet for state expiration */
 			if (now >= ReceiveWindow.getRepairDataExpiration (skb))
 			{
 				if (!isValidNla) {
 					droppedInvalid++;
 					peer.markLost (skb.getSequenceNumber());
-/* mark receiver window for flushing on next recv() */
+/* Mark receiver window for flushing on next recv() */
 					setPendingPeer (peer);
 					continue;
 				}
@@ -1788,10 +1946,10 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 				}
 				else
 				{
-/* retry */
+/* Retry back to backoff state */
 					ReceiveWindow.setNakBackoffExpiration (skb, now + calculateNakRandomBackoffInterval());
 					peer.setBackoffState (skb);
-					LOG.info ("Data retry #{} attempt {}/{}.",
+					LOG.trace (RX_WINDOW_MARKER, "Data retry #{} attempt {}/{}.",
                                                    skb.getSequenceNumber(),
                                                    ReceiveWindow.getDataRetryCount (skb),
                                                    this.nak_data_retries);
@@ -1799,16 +1957,16 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 			}
 			else
 			{
-/* packet expires some time later */
+/* Packet expires some time later */
 				break;
 			}
 		}
 
 		if (droppedInvalid > 0)
-			LOG.info ("Dropped {} message due to invalid NLA.", droppedInvalid);
+			LOG.trace (RX_WINDOW_MARKER, "Dropped {} message due to invalid NLA.", droppedInvalid);
 
 		if (dropped > 0)
-			LOG.info ("Dropped {} messages due to data cancellation.", dropped);
+			LOG.trace (RX_WINDOW_MARKER, "Dropped {} messages due to data cancellation.", dropped);
 
 		if (peer.hasDataLoss() &&
 		    !peer.hasPendingLinkData())
@@ -1820,22 +1978,32 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 
 		if (!waitDataQueue.isEmpty()) {
 			final long seconds = (peer.firstRepairDataExpiration() - now) / 1000;
-			LOG.info ("Next expiration set in {} seconds.", seconds);
+			LOG.trace (NETWORK_MARKER, "Next expiration set in {} seconds.", seconds);
 		} else {
-			LOG.info ("Wait data queue empty.");
+			LOG.trace (RX_WINDOW_MARKER, "Wait data queue empty.");
 		}
 	}
 
+/* Set receiver in pending event queue
+ */        
 	private void setPendingPeer (Peer peer)
 	{
+/* Pre-conditions */
+                assert (null != peer);
+                
 		if (peer.hasPendingLinkData()) return;
 		this.peers_pending.addFirst (peer);
 		peer.setPendingLinkData();
 	}
 
+/* Send SPM-request to a new peer, this packet type has no contents
+ *
+ * On success, TRUE is returned, if operation would block FALSE is
+ * returned.
+ */        
 	private boolean sendSpmr (Peer peer)
 	{
-		LOG.info ("sendSpmr");
+		LOG.debug ("sendSpmr");
 
 		SocketBuffer skb = SourcePathMessageRequest.create();
 		Header header = skb.getHeader();
@@ -1872,9 +2040,15 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 return true;
 	}
 
+/* Ambient/heartbeat SPM's
+ *
+ * Heartbeat: ihb_tmr decaying between ihb_min and ihb_max 2x after last packet
+ *
+ * On success, TRUE is returned, if operation would block, FALSE is returned.
+ */        
         private boolean sendSpm (int flags)
         {
-                LOG.info ("sendSpm");
+                LOG.debug ("sendSpm");
 
                 SocketBuffer skb = SourcePathMessage.create (this.family, flags);
                 Header header = skb.getHeader();
@@ -1909,9 +2083,13 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 return true;
         }
 
+/* Send selective NAK for one sequence number.
+ *
+ * On success, TRUE is returned, returns FALSE if would block on operation.
+ */        
 	private boolean sendNak (Peer peer, SequenceNumber sequence)
 	{
-		LOG.info ("sendNak");
+		LOG.debug ("sendNak");
 
 		SocketBuffer skb = Nak.create (peer.getNetworkLayerAddress(), peer.getGroupAddress());
 		Header header = skb.getHeader();
@@ -1942,8 +2120,8 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 							 this.udpEncapsulationUnicastPort);
 		try {
 			this.send_sock.send (pkt);
-			LOG.info ("Sent NAK to {}", peer.getNetworkLayerAddress());
-			LOG.info ("NAK: {}", skb);
+			LOG.debug ("Sent NAK to {}", peer.getNetworkLayerAddress());
+			LOG.debug ("NAK: {}", skb);
 			return true;
 		} catch (java.io.IOException e) {
 			LOG.error (e.toString());
@@ -1951,9 +2129,14 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		}
 	}
 
+/* A NAK packet with a OPT_NAK_LIST option extension
+ *
+ * On success, TRUE is returned.  on error, FALSE is returned.
+ */        
 	private boolean sendNakList (Peer peer, List<SequenceNumber> sqn_list)
 	{
-		LOG.info ("sendNakList");
+                if (LOG.isDebugEnabled())
+                        LOG.debug ("sendNakList (source:{} sqn-list:{})", peer.getNetworkLayerAddress(), sqn_list);
 
 		SocketBuffer skb = Nak.create (peer.getNetworkLayerAddress(), peer.getGroupAddress(), sqn_list.size());
 		Header header = skb.getHeader();
@@ -1986,7 +2169,6 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 							 this.udpEncapsulationUnicastPort);
 		try {
 			this.send_sock.send (pkt);
-			LOG.info ("Sent NAK to {}", peer.getNetworkLayerAddress());
 			return true;
 		} catch (java.io.IOException e) {
 			LOG.error (e.toString());
@@ -1994,6 +2176,10 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		}
 	}
 
+/* Send a NAK confirm (NCF) message with provided sequence number list.
+ *
+ * On success, TRUE is returned, returns FALSE if operation would block.
+ */        
         private boolean sendNakConfirm (
                 InetAddress nak_src_nla,
                 InetAddress nak_grp_nla,
@@ -2003,7 +2189,8 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 assert (null != nak_src_nla);
                 assert (null != nak_grp_nla);
                 
-		LOG.info ("sendNakConfirm");
+                if (LOG.isDebugEnabled())
+                        LOG.debug ("sendNakConfirm");
 
 		SocketBuffer skb = NakConfirm.create (nak_src_nla, nak_grp_nla);
 		Header header = skb.getHeader();
@@ -2030,8 +2217,8 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 							 this.udpEncapsulationMulticastPort);
 		try {
 			this.send_sock.send (pkt);
-			LOG.info ("Sent NCF to {}", this.send_gsr.getMulticastAddress());
-			LOG.info ("NCF: {}", skb);
+			LOG.debug ("Sent NCF to {}", this.send_gsr.getMulticastAddress());
+			LOG.debug ("NCF: {}", skb);
 			return true;
 		} catch (java.io.IOException e) {
 			LOG.error (e.toString());
@@ -2039,13 +2226,18 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		}
         }
 
+/* A NCF packet with a OPT_NAK_LIST option extension
+ *
+ * On success, TRUE is returned.  on error, FALSE is returned.
+ */        
 	private boolean sendNakConfirmList (
                 InetAddress nak_src_nla,
                 InetAddress nak_grp_nla,
                 List<SequenceNumber> sqn_list
                 )
 	{
-		LOG.info ("sendNakConfirmList");
+                if (LOG.isDebugEnabled())
+        		LOG.debug ("sendNakConfirmList");
 
 		SocketBuffer skb = NakConfirm.create (nak_src_nla, nak_grp_nla, sqn_list.size());
 		Header header = skb.getHeader();
@@ -2095,7 +2287,13 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                         this.nextPoll = this.next_heartbeat_spm;
                 }
         }
-        
+
+/* Send one PGM original data packet, callee owned memory.
+ *
+ * On success, returns PGM_IO_STATUS_NORMAL, on block for non-blocking sockets
+ * returns PGM_IO_STATUS_WOULD_BLOCK, returns PGM_IO_STATUS_RATE_LIMITED if
+ * packet size exceeds the current rate limit.
+ */        
         private IoStatus sendOriginalData (byte[] tsdu, int offset, int tsdu_length)
         {
 /* Pre-conditions */
@@ -2148,6 +2346,13 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 return max_tsdu;
         }
 
+/* Send PGM original data, callee owned memory.  If larger than maximum TPDU
+ * size will be fragmented.
+ *
+ * On success, returns PGM_IO_STATUS_NORMAL, on block for non-blocking sockets
+ * returns PGM_IO_STATUS_WOULD_BLOCK, returns PGM_IO_STATUS_RATE_LIMITED if
+ * packet size exceeds the current rate limit.
+ */        
         private IoStatus send_apdu (byte[] apdu, int offset, int apdu_length)
         {
                 SocketBuffer skb = null;
@@ -2240,9 +2445,11 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 return true;
         }
 
+/* Mark sequence as recovery failed.
+ */        
 	private void cancel (Peer peer, SocketBuffer skb, long now)
 	{
-		LOG.info ("Lost data #{} due to cancellation.", skb.getSequenceNumber());
+		LOG.trace (RX_WINDOW_MARKER, "Lost data #{} due to cancellation.", skb.getSequenceNumber());
 
 		peer.markLost (skb.getSequenceNumber());
 
@@ -2251,7 +2458,7 @@ LOG.info ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 	}
 
 /* The java Math library function Math.random() generates a double value in the
- * range [0,1). Notice this range does not include the 1.
+ * range [0,1]. Notice this range does not include the 1.
  * Reference: http://stackoverflow.com/a/363732/175849
  */
 	private long randomIntRange (long begin, long end)

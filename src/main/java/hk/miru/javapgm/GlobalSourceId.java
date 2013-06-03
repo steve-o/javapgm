@@ -14,6 +14,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Random;
 
+import org.apache.logging.log4j.LogManager;
+
 import javax.annotation.Nullable;
 
 public class GlobalSourceId
@@ -93,7 +95,7 @@ public class GlobalSourceId
 		try {
 			digest.update (hostname.getBytes ("US-ASCII"));
 		} catch (java.io.UnsupportedEncodingException e) {
-			System.out.println ("US-ASCII encoding not supported by JVM: " + e.toString());
+			LogManager.getLogger (GlobalSourceId.class.getName()).warn ("US-ASCII encoding not supported by JVM: {}",  e);
 			digest.update (hostname.getBytes ());
 		}
 		set (digest.digest());

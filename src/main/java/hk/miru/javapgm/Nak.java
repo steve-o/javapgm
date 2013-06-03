@@ -11,11 +11,13 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.Marker;
+import org.apache.logging.log4j.MarkerManager;
 
 @SuppressWarnings("unused")
 public class Nak {
-        private static Logger LOG = LogManager.getLogger (Nak.class.getName());
+    
+        private static final Marker NETWORK_MARKER = MarkerManager.getMarker ("NETWORK");
     
 	protected SocketBuffer	_skb = null;
 	protected int		_offset = 0;
@@ -235,7 +237,7 @@ public class Nak {
 		}
                 OptionHeader optHeader = new OptionHeader (this._skb, this._offset + opt_nak_list_offset);
                 if (!optHeader.isLengthOption()) {
-                        LOG.info ("Malformed NAK rejected on unexpected primary PGM option type.");
+                        LogManager.getLogger (Nak.class.getName()).trace (NETWORK_MARKER, "Malformed NAK rejected on unexpected primary PGM option type.");
                         return sqn_list;
                 }
                 OptionLength optLength = new OptionLength (this._skb, optHeader.getOffset());

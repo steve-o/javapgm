@@ -9,8 +9,13 @@ import java.net.InetAddress;
 import java.util.List;
 import java.util.Queue;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class Peer {
        
+        private Logger LOG = LogManager.getLogger (Peer.class.getName());
+    
 	private TransportSessionId tsi = null;
 	private InetAddress group_nla = null;
 	private InetAddress nla = null, local_nla = null;
@@ -25,17 +30,34 @@ public class Peer {
 	private long expiration = 0;
 
 	public Peer (
+                Socket sock,
 		TransportSessionId tsi,
-		int max_tpdu,
-		int rxw_sqns,
-		int rxw_secs,
-		long rxw_max_rte
+                InetAddress src_addr,
+                InetAddress dst_addr,
+                long now
 		)
 	{
+/* Pre-conditions */
+                checkNotNull (sock);
                 checkNotNull (tsi);
+                checkNotNull (src_addr);
+                checkNotNull (dst_addr);
+                
+                if (LOG.isDebugEnabled())
+                        LOG.debug ("newPeer (tsi:{})", tsi);
+                
+                this.expiration = now + sock.getPeerExpiration();
 		this.tsi = tsi;
-		this.spm_sqn = SequenceNumber.valueOf (0);
-		this.window = new ReceiveWindow (tsi, max_tpdu, rxw_sqns, rxw_secs, rxw_max_rte);
+                this.group_nla = dst_addr;
+                this.local_nla = src_addr;
+		this.spm_sqn = SequenceNumber.ZERO;
+                
+		this.window = new ReceiveWindow (tsi,
+                                                 sock.getMaximumTpdu(),
+                                                 sock.getReceiveWindowSizeInSequenceNumbers(),   /* RXW_SQNS */
+                                                 sock.getReceiveWindowSizeInSeconds(),    /* RXW_SECS */
+                                                 sock.getMaximumReceiveRate());     /* RXW_MAX_RTE */
+                this.spmrExpiration = now + sock.getSpmRequestExpiration();
 	}
 
 	public ReceiveWindow.Returns add (SocketBuffer skb, long now, long nak_rb_expiry) {
