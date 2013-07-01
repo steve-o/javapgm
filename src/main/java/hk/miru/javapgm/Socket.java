@@ -184,14 +184,14 @@ public class Socket {
                 LOG.debug ("PGM socket successfully created.");
         }
 
-/* Timeout for pending timer */
+/* Timeout for pending timer in microseconds */
         public long getTimeRemain() {
                 checkArgument (this.isConnected);
                 long usecs = timerExpiration();
                 return usecs;
         }
 
-/* Timeout for rate limited IO */
+/* Timeout for rate limited IO in microseconds */
         public long getRateRemain() {
                 checkArgument (false);
                 return 0;

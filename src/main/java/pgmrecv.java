@@ -110,11 +110,11 @@ public class pgmrecv {
                                 on_data (skbs);
 				break;
 			case IO_STATUS_TIMER_PENDING:
-                                timeout = this.sock.getTimeRemain();
+                                timeout = this.sock.getTimeRemain() / 1000L;
 /* Workaround lack of functional goto in Java */                                    
 			case IO_STATUS_RATE_LIMITED:
                                 if (hk.miru.javapgm.Socket.IoStatus.IO_STATUS_RATE_LIMITED == status) {
-                                        timeout = this.sock.getRateRemain();
+                                        timeout = this.sock.getRateRemain() / 1000L;
                                 }
 			case IO_STATUS_WOULD_BLOCK:
                                 if (hk.miru.javapgm.Socket.IoStatus.IO_STATUS_WOULD_BLOCK == status) {

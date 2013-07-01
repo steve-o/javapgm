@@ -110,11 +110,11 @@ public class daytime {
                                 long timeout = sleepUntil - now;
                                 switch (status) {
                                 case IO_STATUS_TIMER_PENDING:
-                                        timeout = Math.min (this.sock.getTimeRemain(), timeout);
+                                        timeout = Math.min (this.sock.getTimeRemain() / 1000L, timeout);
 /* Workaround lack of functional goto in Java */                                    
                                 case IO_STATUS_RATE_LIMITED:
                                         if (hk.miru.javapgm.Socket.IoStatus.IO_STATUS_RATE_LIMITED == status) {
-                                                timeout = Math.min (this.sock.getRateRemain(), timeout);
+                                                timeout = Math.min (this.sock.getRateRemain() / 1000L, timeout);
                                         }
                                 case IO_STATUS_WOULD_BLOCK:
                                         if (timeout > 0 && selector.select (timeout) > 0) {
