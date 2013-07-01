@@ -145,6 +145,14 @@ public class Socket {
 		IO_STATUS_CONGESTION
 	}
 
+/* Return current (relative or absolute) time in microseconds.
+ */        
+        public static long microTime()
+        {
+//                return System.currentTimeMillis() * 1000;
+                return System.nanoTime() / 1000;
+        }
+        
 /* Create a PGM socket object.  Can only create UDP encapsulated transports.
  *
  * If send == recv only two sockets need to be created iff ip headers are not
@@ -865,11 +873,11 @@ public class Socket {
                                 return false;
                         }
 
-                        this.nextPoll = this.next_ambient_spm = System.currentTimeMillis() + this.spm_ambient_interval;
+                        this.nextPoll = this.next_ambient_spm = Socket.microTime() + this.spm_ambient_interval;
                 }
                 else
                 {
-                        this.nextPoll = System.currentTimeMillis() + (30 * 1000);
+                        this.nextPoll = Socket.microTime() + (30 * 1000 * 1000);
                 }
 
                 this.isConnected = true;
@@ -977,7 +985,7 @@ public class Socket {
 				this.buffer.flip();
 				this.rx_buffer = new SocketBuffer (this.buffer.remaining());
                                 this.rx_buffer.setSocket (this);
-				this.rx_buffer.setTimestamp (System.currentTimeMillis());
+				this.rx_buffer.setTimestamp (Socket.microTime());
 				this.rx_buffer.put (this.rx_buffer.getRawBytes().length);
 				this.buffer.get (this.rx_buffer.getRawBytes(), 0, this.rx_buffer.getRawBytes().length);
 				this.buffer.clear();
@@ -1520,9 +1528,9 @@ LOG.debug ("flushPeersPending");
 
 	private boolean timerCheck()
 	{
-		final long now = System.currentTimeMillis();
+		final long now = Socket.microTime();
 		final boolean hasExpired = now >= this.nextPoll;
-LOG.debug ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
+LOG.debug ("now: {} next: {}", now, (this.nextPoll - now) / (1000 * 1000));
 		return hasExpired;
 	}
 
@@ -1530,7 +1538,7 @@ LOG.debug ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
  */
         private long timerExpiration()
         {
-                final long now = System.currentTimeMillis();
+                final long now = Socket.microTime();
                 final long expiration = this.nextPoll > now ? (this.nextPoll - now) : 0;
                 return expiration;
         }
@@ -1542,7 +1550,7 @@ LOG.debug ("now: {} next: {}", now, (this.nextPoll - now) / 1000);
  */
 	private boolean timerDispatch()
 	{
-		final long now = System.currentTimeMillis();
+		final long now = Socket.microTime();
 		long nextExpiration = 0;
 
 		LOG.debug ("timerDispatch");
@@ -1813,7 +1821,7 @@ LOG.debug ("SKB expiration now + {}", (ReceiveWindow.getNakBackoffExpiration (sk
 		}
 
 		if (!nakBackoffQueue.isEmpty()) {
-			final long secs = (peer.firstNakBackoffExpiration() - now) / 1000;
+			final long secs = (peer.firstNakBackoffExpiration() - now) / (1000 * 1000);
 			LOG.trace (NETWORK_MARKER, "Next expiration set in {} seconds.", secs);
 		} else {
 			LOG.trace (RX_WINDOW_MARKER, "NAK backoff queue empty.");
@@ -1871,7 +1879,7 @@ LOG.debug ("waitNcfQueue contains {} SKBs.", waitNakConfirmQueue.size());
 			else
 			{
 /* packet expires some time later */
-				final long seconds = (ReceiveWindow.getNakRepeatExpiration (skb) - now) / 1000;
+				final long seconds = (ReceiveWindow.getNakRepeatExpiration (skb) - now) / (1000 * 1000);
 				LOG.trace (RX_WINDOW_MARKER, "NCF retry #{} is delayed {} seconds.",
                                            skb.getSequenceNumber(), seconds);
 			}
@@ -1894,10 +1902,10 @@ LOG.debug ("waitNcfQueue contains {} SKBs.", waitNakConfirmQueue.size());
 		if (!waitNakConfirmQueue.isEmpty())
 		{
 			if (peer.firstNakRepeatExpiration() > now) {
-				final long seconds = (peer.firstNakRepeatExpiration() - now) / 1000;
+				final long seconds = (peer.firstNakRepeatExpiration() - now) / (1000 * 1000);
 				LOG.trace (NETWORK_MARKER, "Next expiration set in {} seconds.", seconds);
 			} else {
-				final long seconds = (now - peer.firstNakRepeatExpiration()) / 1000;
+				final long seconds = (now - peer.firstNakRepeatExpiration()) / (1000 * 1000);
 				LOG.trace (NETWORK_MARKER, "Next expiration set in -{} seconds.", seconds);
 			}
 		}
@@ -1977,7 +1985,7 @@ LOG.debug ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 		}
 
 		if (!waitDataQueue.isEmpty()) {
-			final long seconds = (peer.firstRepairDataExpiration() - now) / 1000;
+			final long seconds = (peer.firstRepairDataExpiration() - now) / (1000 * 1000);
 			LOG.trace (NETWORK_MARKER, "Next expiration set in {} seconds.", seconds);
 		} else {
 			LOG.trace (RX_WINDOW_MARKER, "Wait data queue empty.");
@@ -2303,7 +2311,7 @@ LOG.debug ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 
 		SocketBuffer skb = OriginalData.create (this.family, tsdu_length);
                 skb.setSocket (this);
-                skb.setTimestamp (System.currentTimeMillis());
+                skb.setTimestamp (Socket.microTime());
 		Header header = skb.getHeader();
 		OriginalData odata = skb.getAsOriginalData();
 		header.setGlobalSourceId (this.tsi.getGlobalSourceId());
@@ -2363,7 +2371,7 @@ LOG.debug ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
 
                         skb = OriginalData.create (this.family, tsdu_length);
                         skb.setSocket (this);
-                        skb.setTimestamp (System.currentTimeMillis());
+                        skb.setTimestamp (Socket.microTime());
                         Header header = skb.getHeader();
                         OriginalData odata = skb.getAsOriginalData();
                         header.setGlobalSourceId (this.tsi.getGlobalSourceId());
@@ -2440,7 +2448,7 @@ LOG.debug ("waitDataQueue contains {} SKBs.", waitDataQueue.size());
                 
 /* Reset SPM timer */
                 this.spm_heartbeat_state = 1;
-                this.next_heartbeat_spm = System.currentTimeMillis() + this.spm_heartbeat_interval[this.spm_heartbeat_state++];
+                this.next_heartbeat_spm = Socket.microTime() + this.spm_heartbeat_interval[this.spm_heartbeat_state++];
                 
                 return true;
         }

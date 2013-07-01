@@ -24,8 +24,8 @@ public class pgmsend {
         int txw_max_rte = 400 * 1000;       /* Very conservative rate, 2.5mb/s */
 	int txw_sqns = 128;
 	int txw_secs = 0;
-        int ambientSpm = 30 * 1000;
-        List<Integer> heartbeatSpm = Arrays.asList (new Integer[]{100, 100, 100, 100, 1300, 7 * 1000, 16 * 1000, 25 * 1000, 30 * 1000});
+        int ambientSpm = 30 * 1000 * 1000;
+        List<Integer> heartbeatSpm = Arrays.asList (new Integer[]{100 * 1000, 100 * 1000, 100 * 1000, 100 * 1000, 1300 * 1000, 7 * 1000 * 1000, 16 * 1000 * 1000, 25 * 1000 * 1000, 30 * 1000 * 1000});
         int multicastHops = 16;
 
         hk.miru.javapgm.Socket sock = null;

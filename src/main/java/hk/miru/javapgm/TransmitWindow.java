@@ -2,16 +2,18 @@
  */
 package hk.miru.javapgm;
 
-import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.Marker;
+import org.apache.logging.log4j.MarkerManager;
 
 public class TransmitWindow {
     
         private static Logger LOG = LogManager.getLogger (TransmitWindow.class.getName());
+        private static final Marker TX_WINDOW_MARKER = MarkerManager.getMarker ("TX_WINDOW");
 
 	protected TransportSessionId tsi;
 
@@ -273,7 +275,7 @@ public class TransmitWindow {
         private boolean pushSelectiveRetransmit (SequenceNumber sequence) {
                 SocketBuffer skb = peek (sequence);
                 if (null == skb) {
-                        LOG.trace ("Requested packet {} not in window.", sequence);
+                        LOG.trace (TX_WINDOW_MARKER, "Requested packet {} not in window.", sequence);
                         return false;
                 }
                 
@@ -313,7 +315,7 @@ public class TransmitWindow {
                 
 /* Packet payload still in transit */
                 if (1 != skb.getUsers()) {
-                        LOG.info ("Retransmit sequence {} is still in transit in transmit thread.", skb.getSequenceNumber());
+                        LOG.trace (TX_WINDOW_MARKER, "Retransmit sequence {} is still in transit in transmit thread.", skb.getSequenceNumber());
                         return null;
                 }
                 if (0 == state.pkt_cnt_requested) {

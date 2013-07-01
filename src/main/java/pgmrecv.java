@@ -27,11 +27,11 @@ public class pgmrecv {
 	int max_tpdu = 1500;
 	int rxw_sqns = 128;
 	int rxw_secs = 0;
-	int peerExpiration = 300 * 1000;
+	int peerExpiration = 300 * 1000 * 1000;
         int spmrExpiration = 250;
 	int nak_bo_ivl = 50;
-	int nak_rpt_ivl = 2 * 1000;
-        int nak_rdata_ivl = 2 * 1000;
+	int nak_rpt_ivl = 2 * 1000 * 1000;
+        int nak_rdata_ivl = 2 * 1000 * 1000;
 	int nak_data_retries = 50;
 	int nak_ncf_retries = 50;
         int multicastHops = 16;
